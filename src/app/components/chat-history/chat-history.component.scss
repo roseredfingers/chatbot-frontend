@@ -1,0 +1,99 @@
+.history-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  color: #e0e0e0;
+}
+
+.history-header {
+  padding: 16px;
+}
+
+.new-chat-btn {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+
+  mat-icon {
+    margin-right: 8px;
+  }
+}
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.conversation-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  gap: 12px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+
+    .delete-btn {
+      opacity: 1;
+    }
+  }
+
+  &.active {
+    background: rgba(102, 126, 234, 0.2);
+  }
+}
+
+.conv-icon {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.conv-details {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.conv-title {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conv-date {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.delete-btn {
+  opacity: 0;
+  transition: opacity 0.2s;
+  color: rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+
+  &:hover {
+    color: #ef5350;
+  }
+}
+
+.no-history {
+  text-align: center;
+  padding: 32px 16px;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 14px;
+}
+
+mat-divider {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}

@@ -1,0 +1,50 @@
+<mat-toolbar class="profile-toolbar">
+  <button mat-icon-button (click)="goBack()">
+    <mat-icon>arrow_back</mat-icon>
+  </button>
+  <span>User Profile</span>
+</mat-toolbar>
+
+<div class="profile-container">
+  <mat-card class="profile-card">
+    <mat-card-content>
+      <div class="avatar-section">
+        <div class="large-avatar">{{ userInitial }}</div>
+        <h2>{{ profile.name }}</h2>
+      </div>
+
+      <div class="info-section">
+        <div class="info-row">
+          <mat-icon>person</mat-icon>
+          <div class="info-content">
+            <span class="info-label">Full Name</span>
+            <span class="info-value">{{ profile.name }}</span>
+          </div>
+        </div>
+
+        <div class="info-row">
+          <mat-icon>email</mat-icon>
+          <div class="info-content">
+            <span class="info-label">Email Address</span>
+            <span class="info-value">{{ profile.email }}</span>
+          </div>
+        </div>
+
+        <div class="info-row">
+          <mat-icon>phone</mat-icon>
+          <div class="info-content">
+            <span class="info-label">Phone Number</span>
+            <span class="info-value">{{ profile.phone }}</span>
+          </div>
+        </div>
+      </div>
+    </mat-card-content>
+
+    <mat-card-actions>
+      <button mat-raised-button color="primary" (click)="goBack()">
+        <mat-icon>arrow_back</mat-icon>
+        Back to Chat
+      </button>
+    </mat-card-actions>
+  </mat-card>
+</div>
