@@ -77,12 +77,6 @@ export class ChatWindowComponent implements OnChanges, AfterViewChecked {
         },
         error: () => {
           this.isLoading = false;
-          const errorMsg: ChatMessage = {
-            role: 'bot',
-            content: 'Sorry, something went wrong. Please try again.',
-            timestamp: new Date(),
-          };
-          this.messages = [...this.messages, errorMsg];
           this.shouldScroll = true;
         },
       });

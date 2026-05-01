@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, HostListener, OnInit, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -46,14 +46,21 @@ export class ChatComponent implements OnInit {
     this.userName = this.authService.getUserName();
     this.userInitial = this.userName.charAt(0).toUpperCase();
 
+    const userEmail = this.authService.getUserEmail();
+    this.chatService.initForUser(userEmail, this.userName);
+
     this.breakpointObserver
       .observe([Breakpoints.Handset])
       .subscribe((result) => {
         this.isMobile = result.matches;
       });
 
-    const conversations = this.chatService.createConversation();
-    this.activeConversation = conversations;
+    this.activeConversation = this.chatService.createConversation();
+  }
+
+  @HostListener('window:beforeunload')
+  onBeforeUnload(): void {
+    this.chatService.saveNow();
   }
 
   onConversationSelected(conversation: Conversation): void {
@@ -75,6 +82,7 @@ export class ChatComponent implements OnInit {
   }
 
   logout(): void {
+    this.chatService.saveNow();
     this.authService.logout();
   }
 

@@ -1,22 +1,35 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, of, delay, tap } from 'rxjs';
+import { BehaviorSubject, Observable, map, catchError, of } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
 import {
   ChatMessage,
-  ChatRequest,
   ChatResponse,
   Conversation,
 } from '../models/chat.model';
+import { ChatHistoryStorageService } from './chat-history-storage.service';
 import { environment } from '../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class ChatService {
   private conversations$ = new BehaviorSubject<Conversation[]>([]);
-  private messagesMap = new Map<string, ChatMessage[]>();
+  private currentUserId = '';
+  private currentUserName = '';
+  private saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private http: HttpClient) {
-    this.loadMockConversations();
+  constructor(
+    private http: HttpClient,
+    private storageService: ChatHistoryStorageService
+  ) {}
+
+  initForUser(userId: string, userName: string): void {
+    this.currentUserId = userId;
+    this.currentUserName = userName;
+    this.storageService.loadHistory(userId).subscribe((conversations) => {
+      if (conversations.length > 0) {
+        this.conversations$.next(conversations);
+      }
+    });
   }
 
   getConversations(): Observable<Conversation[]> {
@@ -24,37 +37,63 @@ export class ChatService {
   }
 
   getMessages(conversationId: string): ChatMessage[] {
-    return this.messagesMap.get(conversationId) ?? [];
+    const conv = this.conversations$.value.find((c) => c.id === conversationId);
+    return conv?.messages ?? [];
   }
 
-  sendMessage(sessionId: string, message: string): Observable<ChatResponse> {
+  sendMessage(
+    sessionId: string,
+    message: string
+  ): Observable<ChatResponse> {
     const userMessage: ChatMessage = {
       role: 'user',
       content: message,
       timestamp: new Date(),
     };
 
-    const existing = this.messagesMap.get(sessionId) ?? [];
-    existing.push(userMessage);
-    this.messagesMap.set(sessionId, existing);
+    this.addMessageToConversation(sessionId, userMessage);
     this.updateConversationTitle(sessionId, message);
 
-    const payload: ChatRequest = {
-      message,
-      session_id: sessionId,
+    const payload = {
+      type: 'message',
+      text: message,
+      channelId: sessionId,
+      from: { id: this.currentUserId, name: this.currentUserName },
+      conversation: { id: sessionId },
+      timestamp: new Date().toISOString(),
     };
 
     return this.http
       .post<ChatResponse>(environment.chatApiUrl, payload)
       .pipe(
-        tap((response) => {
+        map((response) => {
+          const answer = response.answer ?? '';
+          const suggestedQuestions = response.suggested_questions ?? [];
+
           const botMessage: ChatMessage = {
             role: 'bot',
-            content: response.answer,
-            suggestedQuestions: response.suggested_questions,
+            content: answer,
+            suggestedQuestions,
             timestamp: new Date(),
           };
-          existing.push(botMessage);
+          this.addMessageToConversation(sessionId, botMessage);
+          this.debouncedSave();
+
+          return response;
+        }),
+        catchError((err) => {
+          console.error('Chat API error:', err);
+          const errorMsg: ChatMessage = {
+            role: 'bot',
+            content: 'Sorry, something went wrong. Please try again.',
+            timestamp: new Date(),
+          };
+          this.addMessageToConversation(sessionId, errorMsg);
+          return of({
+            answer: errorMsg.content,
+            suggested_questions: [],
+            status: 500,
+          });
         })
       );
   }
@@ -64,10 +103,10 @@ export class ChatService {
       id: uuidv4(),
       title: 'New Chat',
       lastUpdated: new Date(),
+      messages: [],
     };
     const current = this.conversations$.value;
     this.conversations$.next([conversation, ...current]);
-    this.messagesMap.set(conversation.id, []);
     return conversation;
   }
 
@@ -76,7 +115,29 @@ export class ChatService {
       (c) => c.id !== conversationId
     );
     this.conversations$.next(current);
-    this.messagesMap.delete(conversationId);
+    this.storageService
+      .deleteHistory(this.currentUserId, conversationId)
+      .subscribe();
+  }
+
+  saveNow(): void {
+    if (!this.currentUserId) return;
+    this.storageService
+      .saveHistory(this.currentUserId, this.conversations$.value)
+      .subscribe();
+  }
+
+  private addMessageToConversation(
+    conversationId: string,
+    message: ChatMessage
+  ): void {
+    const conversations = this.conversations$.value;
+    const conv = conversations.find((c) => c.id === conversationId);
+    if (conv) {
+      conv.messages.push(message);
+      conv.lastUpdated = new Date();
+      this.conversations$.next([...conversations]);
+    }
   }
 
   private updateConversationTitle(
@@ -90,46 +151,16 @@ export class ChatService {
         firstMessage.length > 40
           ? firstMessage.substring(0, 40) + '...'
           : firstMessage;
+      this.conversations$.next([...conversations]);
     }
-    conv!.lastUpdated = new Date();
-    this.conversations$.next([...conversations]);
   }
 
-  // TODO: Replace with Cosmos DB queries
-  private loadMockConversations(): void {
-    const mockConversations: Conversation[] = [
-      {
-        id: uuidv4(),
-        title: 'How to deploy to Azure?',
-        lastUpdated: new Date(Date.now() - 86400000),
-      },
-      {
-        id: uuidv4(),
-        title: 'Explain microservices architecture',
-        lastUpdated: new Date(Date.now() - 172800000),
-      },
-    ];
-
-    mockConversations.forEach((conv) => {
-      this.messagesMap.set(conv.id, [
-        {
-          role: 'user',
-          content: conv.title,
-          timestamp: new Date(conv.lastUpdated.getTime() - 60000),
-        },
-        {
-          role: 'bot',
-          content: `This is a mock response for "${conv.title}". Connect to Cosmos DB to load real history.`,
-          suggestedQuestions: [
-            'Tell me more',
-            'What are the best practices?',
-            'Can you give an example?',
-          ],
-          timestamp: conv.lastUpdated,
-        },
-      ]);
-    });
-
-    this.conversations$.next(mockConversations);
+  private debouncedSave(): void {
+    if (this.saveDebounceTimer) {
+      clearTimeout(this.saveDebounceTimer);
+    }
+    this.saveDebounceTimer = setTimeout(() => {
+      this.saveNow();
+    }, 3000);
   }
 }
