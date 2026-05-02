@@ -65,6 +65,8 @@ export class ChatComponent implements OnInit {
 
   onConversationSelected(conversation: Conversation): void {
     this.activeConversation = conversation;
+    // Prime the RAG backend with this conversation's history on first open.
+    this.chatService.primeConversationContext(conversation);
     if (this.isMobile) {
       this.sidenav.close();
     }

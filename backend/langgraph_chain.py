@@ -1055,3 +1055,53 @@ class ThreadedChatManager:
                 result.get("suggested_questions", []),
                 200,
             )
+
+    def inject_history(self, thread_id: str, messages: list) -> None:
+        """
+        Seed the in-memory LangGraph checkpoint with a conversation's stored
+        messages. Called once per login session when a user opens an existing
+        conversation for the first time, so the RAG flow has full context.
+
+        Skips injection if the thread already has messages (already primed).
+        """
+        existing = checkpoint.get_thread_messages(thread_id)
+        if existing:
+            return
+
+        lc_messages: List[BaseMessage] = []
+        for msg in messages:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if not content:
+                continue
+            if role == "user":
+                lc_messages.append(HumanMessage(content=content))
+            elif role in ("bot", "assistant"):
+                lc_messages.append(AIMessage(content=content))
+
+        if not lc_messages:
+            return
+
+        lc_messages = trim_history(lc_messages)
+        checkpoint.save_thread_state(
+            thread_id,
+            {
+                "messages": lc_messages,
+                "question": "",
+                "original_question": None,
+                "needs_rag": False,
+                "is_ticket": False,
+                "context": None,
+                "answer": None,
+                "suggested_questions": [],
+                "context_relevant": False,
+                "awaiting_ticket_confirmation": False,
+                "awaiting_ticket_detail_confirmation": False,
+                "awaiting_ticket_revision": False,
+                "pending_ticket_details": None,
+                "ticket_id": None,
+            },
+        )
+        logging.info(
+            "Injected %d messages into thread %s.", len(lc_messages), thread_id
+        )

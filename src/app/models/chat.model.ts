@@ -31,3 +31,16 @@ export interface StoredMessage {
   suggestedQuestions?: string[];
   timestamp: string;
 }
+
+export interface AppendExchangeRequest {
+  user_id: string;
+  conversation_id: string;
+  conversation_title: string;
+  user_message: { content: string; timestamp: string };
+  assistant_message: { content: string; timestamp: string; suggestedQuestions?: string[] };
+}
+
+export interface PrimeConversationRequest {
+  session_id: string;
+  messages: StoredMessage[];
+}

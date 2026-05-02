@@ -15,22 +15,37 @@ export class ChatService {
   private conversations$ = new BehaviorSubject<Conversation[]>([]);
   private currentUserId = '';
   private currentUserName = '';
-  private saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Tracks which conversation IDs have already been primed into the RAG
+   * backend this login session. Cleared on logout / page reload.
+   */
+  private primedConversations = new Set<string>();
 
   constructor(
     private http: HttpClient,
     private storageService: ChatHistoryStorageService
   ) {}
 
+  // ─── Initialization ───────────────────────────────────────────────────────
+
+  /**
+   * Called once after login. Loads all conversations from Azure Blob Storage
+   * and populates the sidebar.
+   */
   initForUser(userId: string, userName: string): void {
     this.currentUserId = userId;
     this.currentUserName = userName;
+    this.primedConversations.clear();
+
     this.storageService.loadHistory(userId).subscribe((conversations) => {
       if (conversations.length > 0) {
         this.conversations$.next(conversations);
       }
     });
   }
+
+  // ─── Queries ──────────────────────────────────────────────────────────────
 
   getConversations(): Observable<Conversation[]> {
     return this.conversations$.asObservable();
@@ -41,14 +56,49 @@ export class ChatService {
     return conv?.messages ?? [];
   }
 
-  sendMessage(
-    sessionId: string,
-    message: string
-  ): Observable<ChatResponse> {
+  // ─── Open a conversation (prime RAG on first open) ─────────────────────────
+
+  /**
+   * Must be called whenever the user opens a conversation from the sidebar.
+   * On the first open within this login session the full message history is
+   * sent to the RAG backend so the LangGraph thread has context. Subsequent
+   * opens are no-ops (tracked by `primedConversations`).
+   */
+  primeConversationContext(conversation: Conversation): void {
+    if (this.primedConversations.has(conversation.id)) {
+      return;
+    }
+    if (!conversation.messages.length) {
+      // Nothing to prime for a brand-new conversation.
+      this.primedConversations.add(conversation.id);
+      return;
+    }
+
+    this.primedConversations.add(conversation.id);
+
+    const storedMessages = conversation.messages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+      suggestedQuestions: msg.suggestedQuestions,
+      timestamp: msg.timestamp.toISOString(),
+    }));
+
+    this.storageService
+      .primeConversationHistory({
+        session_id: conversation.id,
+        messages: storedMessages,
+      })
+      .subscribe();
+  }
+
+  // ─── Messaging ────────────────────────────────────────────────────────────
+
+  sendMessage(sessionId: string, message: string): Observable<ChatResponse> {
+    const userTimestamp = new Date();
     const userMessage: ChatMessage = {
       role: 'user',
       content: message,
-      timestamp: new Date(),
+      timestamp: userTimestamp,
     };
 
     this.addMessageToConversation(sessionId, userMessage);
@@ -60,7 +110,7 @@ export class ChatService {
       channelId: sessionId,
       from: { id: this.currentUserId, name: this.currentUserName },
       conversation: { id: sessionId },
-      timestamp: new Date().toISOString(),
+      timestamp: userTimestamp.toISOString(),
     };
 
     return this.http
@@ -69,15 +119,22 @@ export class ChatService {
         map((response) => {
           const answer = response.answer ?? '';
           const suggestedQuestions = response.suggested_questions ?? [];
+          const botTimestamp = new Date();
 
           const botMessage: ChatMessage = {
             role: 'bot',
             content: answer,
             suggestedQuestions,
-            timestamp: new Date(),
+            timestamp: botTimestamp,
           };
           this.addMessageToConversation(sessionId, botMessage);
-          this.debouncedSave();
+
+          // Persist the exchange immediately to Azure Blob Storage.
+          this.appendExchange(
+            sessionId,
+            userMessage,
+            botMessage,
+          );
 
           return response;
         }),
@@ -98,6 +155,8 @@ export class ChatService {
       );
   }
 
+  // ─── Conversation management ──────────────────────────────────────────────
+
   createConversation(): Conversation {
     const conversation: Conversation = {
       id: uuidv4(),
@@ -107,6 +166,8 @@ export class ChatService {
     };
     const current = this.conversations$.value;
     this.conversations$.next([conversation, ...current]);
+    // Mark as primed immediately (no history to inject).
+    this.primedConversations.add(conversation.id);
     return conversation;
   }
 
@@ -115,17 +176,21 @@ export class ChatService {
       (c) => c.id !== conversationId
     );
     this.conversations$.next(current);
+    this.primedConversations.delete(conversationId);
     this.storageService
       .deleteHistory(this.currentUserId, conversationId)
       .subscribe();
   }
 
+  /** Bulk-save all conversations (used on logout / beforeunload). */
   saveNow(): void {
     if (!this.currentUserId) return;
     this.storageService
       .saveHistory(this.currentUserId, this.conversations$.value)
       .subscribe();
   }
+
+  // ─── Private helpers ──────────────────────────────────────────────────────
 
   private addMessageToConversation(
     conversationId: string,
@@ -155,12 +220,35 @@ export class ChatService {
     }
   }
 
-  private debouncedSave(): void {
-    if (this.saveDebounceTimer) {
-      clearTimeout(this.saveDebounceTimer);
-    }
-    this.saveDebounceTimer = setTimeout(() => {
-      this.saveNow();
-    }, 3000);
+  /**
+   * Immediately persists one user + assistant exchange to Azure Blob Storage.
+   * Called right after every assistant response.
+   */
+  private appendExchange(
+    conversationId: string,
+    userMessage: ChatMessage,
+    botMessage: ChatMessage,
+  ): void {
+    if (!this.currentUserId) return;
+
+    const conv = this.conversations$.value.find((c) => c.id === conversationId);
+    const title = conv?.title ?? 'New Chat';
+
+    this.storageService
+      .appendExchange({
+        user_id: this.currentUserId,
+        conversation_id: conversationId,
+        conversation_title: title,
+        user_message: {
+          content: userMessage.content,
+          timestamp: userMessage.timestamp.toISOString(),
+        },
+        assistant_message: {
+          content: botMessage.content,
+          timestamp: botMessage.timestamp.toISOString(),
+          suggestedQuestions: botMessage.suggestedQuestions,
+        },
+      })
+      .subscribe();
   }
 }

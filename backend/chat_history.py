@@ -64,11 +64,12 @@ def append_message(
     role: str,
     content: str,
     suggested_questions: Optional[List[str]] = None,
+    timestamp_override: Optional[str] = None,
 ) -> None:
     msg = {
         "role": role,
         "content": content,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": timestamp_override or datetime.now(timezone.utc).isoformat(),
     }
     if suggested_questions:
         msg["suggestedQuestions"] = suggested_questions

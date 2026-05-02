@@ -2,7 +2,9 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, map, catchError } from 'rxjs';
 import {
+  AppendExchangeRequest,
   Conversation,
+  PrimeConversationRequest,
   StoredConversation,
 } from '../models/chat.model';
 import { environment } from '../../environments/environment';
@@ -10,6 +12,8 @@ import { environment } from '../../environments/environment';
 @Injectable({ providedIn: 'root' })
 export class ChatHistoryStorageService {
   constructor(private http: HttpClient) {}
+
+  // ─── Load all conversations for a user on login ───────────────────────────
 
   loadHistory(userId: string): Observable<Conversation[]> {
     const url = `${environment.chatHistoryApiUrl}/chat_history?user_id=${encodeURIComponent(userId)}`;
@@ -19,6 +23,36 @@ export class ChatHistoryStorageService {
       catchError(() => of([]))
     );
   }
+
+  // ─── Prime the RAG thread on first conversation open ─────────────────────
+
+  primeConversationHistory(
+    req: PrimeConversationRequest
+  ): Observable<void> {
+    const url = `${environment.chatHistoryApiUrl}/prime_conversation`;
+    return this.http.post(url, req).pipe(
+      map(() => void 0),
+      catchError((err) => {
+        console.error('Failed to prime conversation history:', err);
+        return of(void 0);
+      })
+    );
+  }
+
+  // ─── Append one exchange immediately after each assistant response ─────────
+
+  appendExchange(req: AppendExchangeRequest): Observable<void> {
+    const url = `${environment.chatHistoryApiUrl}/append_exchange`;
+    return this.http.post(url, req).pipe(
+      map(() => void 0),
+      catchError((err) => {
+        console.error('Failed to append exchange:', err);
+        return of(void 0);
+      })
+    );
+  }
+
+  // ─── Bulk save (used on logout / beforeunload) ────────────────────────────
 
   saveHistory(userId: string, conversations: Conversation[]): Observable<void> {
     const url = `${environment.chatHistoryApiUrl}/chat_history`;
@@ -37,8 +71,10 @@ export class ChatHistoryStorageService {
     );
   }
 
+  // ─── Delete a conversation ────────────────────────────────────────────────
+
   deleteHistory(userId: string, conversationId: string): Observable<void> {
-    const url = `${environment.chatHistoryApiUrl}/chat_history/delete`;
+    const url = `${environment.chatHistoryApiUrl}/chat_history_delete`;
 
     return this.http
       .post(url, { user_id: userId, conversation_id: conversationId })
@@ -51,8 +87,10 @@ export class ChatHistoryStorageService {
       );
   }
 
-  private serializeConversations(conversations: Conversation[]): StoredConversation[] {
-    return conversations.map((conv) => ({
+  // ─── Serialization helpers ────────────────────────────────────────────────
+
+  serializeConversation(conv: Conversation): StoredConversation {
+    return {
       id: conv.id,
       title: conv.title,
       lastUpdated: conv.lastUpdated.toISOString(),
@@ -62,7 +100,11 @@ export class ChatHistoryStorageService {
         suggestedQuestions: msg.suggestedQuestions,
         timestamp: msg.timestamp.toISOString(),
       })),
-    }));
+    };
+  }
+
+  private serializeConversations(conversations: Conversation[]): StoredConversation[] {
+    return conversations.map((c) => this.serializeConversation(c));
   }
 
   private deserializeConversations(stored: StoredConversation[]): Conversation[] {
