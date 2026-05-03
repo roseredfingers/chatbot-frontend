@@ -1,16 +1,12 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { MsalBroadcastService, MsalService } from '@azure/msal-angular';
 import { AccountInfo, InteractionStatus } from '@azure/msal-browser';
-import { filter, Observable, Subject } from 'rxjs';
+import { filter, Observable } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly _destroy$ = new Subject<void>();
-
-  constructor(
-    private msalService: MsalService,
-    private msalBroadcastService: MsalBroadcastService
-  ) {}
+  private readonly msalService = inject(MsalService);
+  private readonly msalBroadcastService = inject(MsalBroadcastService);
 
   init(): Observable<void> {
     return new Observable<void>((observer) => {
@@ -63,10 +59,5 @@ export class AuthService {
     if (accounts.length > 0) {
       this.msalService.instance.setActiveAccount(accounts[0]);
     }
-  }
-
-  destroy(): void {
-    this._destroy$.next();
-    this._destroy$.complete();
   }
 }

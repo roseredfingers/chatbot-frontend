@@ -1,18 +1,18 @@
 <div class="history-panel">
   <div class="history-header">
-    <button mat-raised-button class="new-chat-btn" (click)="startNewChat()">
+    <button mat-raised-button type="button" class="new-chat-btn" (click)="startNewChat()">
       <mat-icon>add</mat-icon>
       New Chat
     </button>
   </div>
 
-  <mat-divider></mat-divider>
+  <mat-divider />
 
   <div class="history-list">
-    @for (conv of conversations; track conv.id) {
+    @for (conv of chatService.conversations(); track conv.id) {
       <div
         class="conversation-item"
-        [class.active]="conv.id === activeConversationId"
+        [class.active]="conv.id === activeConversationId()"
         (click)="selectConversation(conv)"
       >
         <mat-icon class="conv-icon">chat_bubble_outline</mat-icon>
@@ -22,6 +22,7 @@
         </div>
         <button
           mat-icon-button
+          type="button"
           class="delete-btn"
           (click)="deleteConversation($event, conv.id)"
         >

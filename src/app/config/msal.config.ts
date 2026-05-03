@@ -26,7 +26,7 @@ export const msalConfig: Configuration = {
         if (containsPii) return;
         console.log(message);
       },
-      logLevel: LogLevel.Info,
+      logLevel: environment.production ? LogLevel.Error : LogLevel.Info,
       piiLoggingEnabled: false,
     },
   },

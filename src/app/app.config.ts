@@ -1,6 +1,10 @@
-import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { ApplicationConfig, ErrorHandler, provideZoneChangeDetection } from '@angular/core';
+import {
+  provideHttpClient,
+  withInterceptors,
+  withInterceptorsFromDi,
+} from '@angular/common/http';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import {
   MSAL_GUARD_CONFIG,
@@ -14,6 +18,8 @@ import {
 import { HTTP_INTERCEPTORS } from '@angular/common/http';
 import { PublicClientApplication } from '@azure/msal-browser';
 
+import { apiInterceptor } from './core/http/api.interceptor';
+import { GlobalErrorHandler } from './core/errors/global-error-handler';
 import { routes } from './app.routes';
 import {
   msalConfig,
@@ -29,7 +35,11 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
-    provideHttpClient(withInterceptorsFromDi()),
+    provideHttpClient(
+      withInterceptors([apiInterceptor]),
+      withInterceptorsFromDi()
+    ),
+    { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideAnimationsAsync(),
     {
       provide: MSAL_INSTANCE,

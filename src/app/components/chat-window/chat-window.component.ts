@@ -1,22 +1,24 @@
+import { CommonModule } from '@angular/common';
 import {
   Component,
+  computed,
+  effect,
   ElementRef,
-  Input,
-  OnChanges,
-  SimpleChanges,
-  ViewChild,
-  AfterViewChecked,
+  inject,
+  input,
+  signal,
+  viewChild,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { ChatService } from '../../services/chat.service';
 import { ChatMessage, Conversation } from '../../models/chat.model';
+import { MarkdownPipe } from '../../pipes/markdown.pipe';
+import { ChatService } from '../../services/chat.service';
 
 @Component({
   selector: 'app-chat-window',
@@ -24,6 +26,7 @@ import { ChatMessage, Conversation } from '../../models/chat.model';
   imports: [
     CommonModule,
     FormsModule,
+    MarkdownPipe,
     MatButtonModule,
     MatIconModule,
     MatInputModule,
@@ -34,56 +37,49 @@ import { ChatMessage, Conversation } from '../../models/chat.model';
   templateUrl: './chat-window.component.html',
   styleUrl: './chat-window.component.scss',
 })
-export class ChatWindowComponent implements OnChanges, AfterViewChecked {
-  @Input() conversation!: Conversation;
-  @ViewChild('messagesContainer') messagesContainer!: ElementRef;
+export class ChatWindowComponent {
+  private readonly chatService = inject(ChatService);
 
-  messages: ChatMessage[] = [];
-  userInput = '';
-  isLoading = false;
-  private shouldScroll = false;
+  readonly conversation = input.required<Conversation>();
+  private readonly messagesContainer =
+    viewChild<ElementRef<HTMLElement>>('messagesContainer');
 
-  constructor(private chatService: ChatService) {}
+  readonly userInput = signal('');
+  readonly isLoading = signal(false);
 
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['conversation'] && this.conversation) {
-      this.messages = this.chatService.getMessages(this.conversation.id);
-      this.shouldScroll = true;
-    }
+  readonly messages = computed<ChatMessage[]>(() => {
+    const id = this.conversation().id;
+    const list = this.chatService.conversations();
+    return list.find((c) => c.id === id)?.messages ?? [];
+  });
+
+  constructor() {
+    effect(() => {
+      void this.messages().length;
+      void this.isLoading();
+      queueMicrotask(() => this.scrollToBottom());
+    });
   }
 
-  ngAfterViewChecked(): void {
-    if (this.shouldScroll) {
-      this.scrollToBottom();
-      this.shouldScroll = false;
-    }
+  sendInternal(message: string): void {
+    if (!message || this.isLoading()) return;
+
+    this.userInput.set('');
+    this.isLoading.set(true);
+
+    this.chatService.sendMessage(this.conversation().id, message).subscribe({
+      next: () => this.isLoading.set(false),
+      error: () => this.isLoading.set(false),
+    });
   }
 
   sendMessage(content?: string): void {
-    const message = content ?? this.userInput.trim();
-    if (!message || this.isLoading) return;
-
-    this.userInput = '';
-    this.isLoading = true;
-    this.shouldScroll = true;
-
-    this.chatService
-      .sendMessage(this.conversation.id, message)
-      .subscribe({
-        next: () => {
-          this.isLoading = false;
-          this.messages = this.chatService.getMessages(this.conversation.id);
-          this.shouldScroll = true;
-        },
-        error: () => {
-          this.isLoading = false;
-          this.shouldScroll = true;
-        },
-      });
+    const message = (content ?? this.userInput()).trim();
+    this.sendInternal(message);
   }
 
   onSuggestedQuestionClick(question: string): void {
-    this.sendMessage(question);
+    this.sendInternal(question.trim());
   }
 
   onKeyDown(event: KeyboardEvent): void {
@@ -94,11 +90,9 @@ export class ChatWindowComponent implements OnChanges, AfterViewChecked {
   }
 
   private scrollToBottom(): void {
-    try {
-      const el = this.messagesContainer?.nativeElement;
-      if (el) {
-        el.scrollTop = el.scrollHeight;
-      }
-    } catch (_) {}
+    const el = this.messagesContainer()?.nativeElement;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
   }
 }

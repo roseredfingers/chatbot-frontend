@@ -6,7 +6,8 @@
         "isEnabled": true,
         "excludedTypes": "Request"
       }
-    }
+    },
+    "logLevel": "Information"
   },
   "extensionBundle": {
     "id": "Microsoft.Azure.Functions.ExtensionBundle",
@@ -16,5 +17,6 @@
     "http": {
       "routePrefix": "api"
     }
-  }
+  },
+  "functionTimeout": "00:10:00"
 }

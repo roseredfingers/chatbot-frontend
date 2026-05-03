@@ -1,6 +1,6 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { MsalRedirectComponent } from '@azure/msal-angular';
+import { take } from 'rxjs';
 import { AuthService } from './services/auth.service';
 
 @Component({
@@ -10,14 +10,10 @@ import { AuthService } from './services/auth.service';
   template: '<router-outlet></router-outlet>',
   styles: [],
 })
-export class AppComponent implements OnInit, OnDestroy {
-  constructor(private authService: AuthService) {}
+export class AppComponent implements OnInit {
+  private readonly authService = inject(AuthService);
 
   ngOnInit(): void {
-    this.authService.init().subscribe();
-  }
-
-  ngOnDestroy(): void {
-    this.authService.destroy();
+    this.authService.init().pipe(take(1)).subscribe();
   }
 }

@@ -1,6 +1,6 @@
 <div class="chat-window">
   <div class="messages-container" #messagesContainer>
-    @if (messages.length === 0 && !isLoading) {
+    @if (messages().length === 0 && !isLoading()) {
       <div class="welcome-message">
         <mat-icon class="welcome-icon">smart_toy</mat-icon>
         <h2>How can I help you today?</h2>
@@ -8,7 +8,7 @@
       </div>
     }
 
-    @for (msg of messages; track msg.timestamp) {
+    @for (msg of messages(); track $index) {
       <div class="message-row" [class.user]="msg.role === 'user'" [class.bot]="msg.role === 'bot'">
         @if (msg.role === 'bot') {
           <div class="bot-avatar">
@@ -16,7 +16,7 @@
           </div>
         }
         <div class="message-bubble" [class.user-bubble]="msg.role === 'user'" [class.bot-bubble]="msg.role === 'bot'">
-          <div class="message-content">{{ msg.content }}</div>
+          <div class="message-content" [innerHTML]="msg.content | markdown"></div>
           <div class="message-time">{{ msg.timestamp | date:'shortTime' }}</div>
         </div>
       </div>
@@ -26,6 +26,7 @@
           @for (question of msg.suggestedQuestions; track question) {
             <button
               mat-stroked-button
+              type="button"
               class="suggestion-chip"
               (click)="onSuggestedQuestionClick(question)"
             >
@@ -36,13 +37,13 @@
       }
     }
 
-    @if (isLoading) {
+    @if (isLoading()) {
       <div class="message-row bot">
         <div class="bot-avatar">
           <mat-icon>smart_toy</mat-icon>
         </div>
         <div class="message-bubble bot-bubble loading-bubble">
-          <mat-spinner diameter="20"></mat-spinner>
+          <mat-spinner diameter="20" />
           <span>Thinking...</span>
         </div>
       </div>
@@ -54,18 +55,20 @@
       <input
         matInput
         placeholder="Type a message..."
-        [(ngModel)]="userInput"
+        [ngModel]="userInput()"
+        (ngModelChange)="userInput.set($event)"
         (keydown)="onKeyDown($event)"
-        [disabled]="isLoading"
+        [disabled]="isLoading()"
         autocomplete="off"
       />
     </mat-form-field>
     <button
       mat-fab
       color="primary"
+      type="button"
       class="send-btn"
       (click)="sendMessage()"
-      [disabled]="!userInput.trim() || isLoading"
+      [disabled]="!userInput().trim() || isLoading()"
     >
       <mat-icon>send</mat-icon>
     </button>

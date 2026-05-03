@@ -1,19 +1,19 @@
 <div class="chat-layout">
   <mat-toolbar class="chat-toolbar">
-    <button mat-icon-button (click)="toggleSidenav()">
+    <button mat-icon-button type="button" (click)="toggleSidenav()">
       <mat-icon>menu</mat-icon>
     </button>
     <span class="app-name">AI Chat Assistant</span>
     <span class="toolbar-spacer"></span>
-    <button mat-icon-button [matMenuTriggerFor]="userMenu" class="avatar-btn">
-      <span class="user-avatar">{{ userInitial }}</span>
+    <button mat-icon-button type="button" [matMenuTriggerFor]="userMenu" class="avatar-btn">
+      <span class="user-avatar">{{ userInitial() }}</span>
     </button>
     <mat-menu #userMenu="matMenu">
-      <button mat-menu-item (click)="goToProfile()">
+      <button mat-menu-item type="button" (click)="goToProfile()">
         <mat-icon>person</mat-icon>
         <span>Profile</span>
       </button>
-      <button mat-menu-item (click)="logout()">
+      <button mat-menu-item type="button" (click)="logout()">
         <mat-icon>logout</mat-icon>
         <span>Logout</span>
       </button>
@@ -23,22 +23,20 @@
   <mat-sidenav-container class="sidenav-container">
     <mat-sidenav
       #sidenav
-      [mode]="isMobile ? 'over' : 'side'"
-      [opened]="!isMobile"
+      [mode]="isMobile() ? 'over' : 'side'"
+      [opened]="!isMobile()"
       class="chat-sidenav"
     >
       <app-chat-history
-        [activeConversationId]="activeConversation?.id ?? ''"
+        [activeConversationId]="activeConversation()?.id ?? ''"
         (conversationSelected)="onConversationSelected($event)"
         (newChat)="onNewChat()"
-      ></app-chat-history>
+      />
     </mat-sidenav>
 
     <mat-sidenav-content class="chat-content">
-      @if (activeConversation) {
-        <app-chat-window
-          [conversation]="activeConversation"
-        ></app-chat-window>
+      @if (activeConversation(); as conv) {
+        <app-chat-window [conversation]="conv" />
       } @else {
         <div class="no-conversation">
           <mat-icon>chat_bubble_outline</mat-icon>
