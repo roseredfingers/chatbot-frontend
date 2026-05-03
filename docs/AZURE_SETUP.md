@@ -22,11 +22,34 @@ This document lists the Azure and Microsoft identity values you need to run the 
 
 Used by the Angular app (`@azure/msal-angular`) and should match your tenant.
 
+### 1.1 Step-by-step: create the app registration (MSAL / Entra client)
+
+Use the [Azure portal](https://portal.azure.com). You need permission to **register applications** in Entra ID (or ask an admin to create the app and share the IDs).
+
+1. **Open Entra ID** — Go to **Microsoft Entra ID**.
+2. **New registration** — **App registrations** → **New registration**.
+3. **Basics**
+   - **Name:** e.g. `Chatbot SPA`.
+   - **Supported account types:** usually **Accounts in this organizational directory only** for a single-tenant line-of-business app. Use multitenancy only if you need it.
+   - **Redirect URI:** leave empty here; add SPA URIs in the next step. Click **Register**.
+4. **Redirect URIs (Authentication)** — Open **Authentication** → **Add a platform** → **Single-page application**. Add each URL that will load your Angular app (must match **exactly** — scheme, host, port, path; typically **no** trailing slash):
+   - Local: `http://localhost:4200` (and optionally `http://127.0.0.1:4200`).
+   - Production: e.g. `https://your-app.azurestaticapps.net` or your custom domain.
+   - For modern MSAL (authorization code + PKCE), you usually **do not** enable **Implicit grant** tokens unless something in your stack still requires it.
+5. **API permissions** — **API permissions** → **Add a permission** → **Microsoft Graph** → **Delegated permissions** → add **`User.Read`** → **Add permissions**. Grant **admin consent** for the tenant if required.
+6. **Copy IDs** — On **Overview**, copy **Application (client) ID** → `msalClientId` and **Directory (tenant) ID** → `msalTenantId` in `environment.ts` / `environment.prod.ts`. Set **`redirectUri`** to the same value as one of the registered SPA URIs.
+7. **No browser secret** — This SPA is a public client; **do not** embed a client secret in Angular. Optional **Certificates & secrets** are for confidential server apps, not the MSAL browser flow used here.
+8. **Common errors** — If redirect URIs don’t match, sign-in fails (often `AADSTS50011`). After deploying production, register that URL and update `environment.prod.ts`.
+
+Official docs: [Register an app](https://learn.microsoft.com/entra/identity-platform/quickstart-register-app), [Redirect URI restrictions](https://learn.microsoft.com/entra/identity-platform/reply-url).
+
+### 1.2 Quick reference
+
 | Value | Description | Local typical value | Production typical value |
 |-------|-------------|---------------------|---------------------------|
 | **Application (client) ID** | Entra app registration → *Overview* | Same app, same ID | Same |
-| **Directory (tenant) ID** | Entra → *Overview* (or use `common` / `organizations` only if your app supports it) | Your tenant GUID | Same |
-| **Redirect URI (SPA)** | App registration → *Authentication* → Single-page application | `http://localhost:4200` | `https://<your-static-web-app>.azurestaticapps.net` (or your custom domain) |
+| **Directory (tenant) ID** | Entra → *Overview* | Your tenant GUID | Same |
+| **Redirect URI (SPA)** | *Authentication* → Single-page application | `http://localhost:4200` | `https://<your-static-web-app>.azurestaticapps.net` (or your custom domain) |
 | **API permissions** | *Microsoft Graph* → delegated **`User.Read`** (matches `msal.config.ts`) | — | — |
 
 **Frontend environment fields:**
