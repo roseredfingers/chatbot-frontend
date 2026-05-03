@@ -1,8 +1,7 @@
 """
 Azure Functions v2 Python app.
-Replaces the previous aiohttp-based app.py.
 
-HTTP triggers (all under /api/... prefix, set in host.json):
+HTTP triggers (under /api/... per host.json):
   GET  /api/ping
   POST /api/messages                  – Teams Bot Framework
   POST /api/nuvoco_frontend           – Web/frontend chat
@@ -11,11 +10,18 @@ HTTP triggers (all under /api/... prefix, set in host.json):
   POST /api/chat_history_delete       – Delete a single conversation
   POST /api/prime_conversation        – Inject prior history into RAG thread (first open)
   POST /api/append_exchange           – Persist a single user/assistant exchange
+
+Blob storage and CPU-heavy LangGraph work are offloaded so async routes stay non-blocking
+under concurrent load (aio blob I/O + asyncio.to_thread for sync graph / LLM code).
 """
 
+from __future__ import annotations
+
+import asyncio
 import json
 import logging
 import os
+from urllib.parse import parse_qs, unquote, urlparse
 
 import azure.functions as func
 from botbuilder.core import (
@@ -45,9 +51,9 @@ SETTINGS = BotFrameworkAdapterSettings(
 MEMORY = MemoryStorage()
 CONVERSATION_STATE = ConversationState(MEMORY)
 
-# Deferred import so teams_bot is optional during local dev
 try:
     from teams_bot.my_bot import MyBot
+
     BOT = MyBot(CONVERSATION_STATE)
 except ImportError:
     BOT = None
@@ -75,6 +81,7 @@ def _json_response(data, status_code: int = 200) -> func.HttpResponse:
         body=json.dumps(data, ensure_ascii=False),
         status_code=status_code,
         mimetype="application/json",
+        headers={"X-Content-Type-Options": "nosniff"},
     )
 
 
@@ -82,17 +89,32 @@ def _error_response(message: str, status_code: int = 500) -> func.HttpResponse:
     return _json_response({"error": message}, status_code)
 
 
-# ─────────────────────────────────────────────
-# Health
-# ─────────────────────────────────────────────
+def _first_query_value(req: func.HttpRequest, name: str) -> str:
+    try:
+        raw = req.params.get(name) if req.params else None
+        if raw is not None and str(raw).strip() != "":
+            return str(raw).strip()
+    except Exception:
+        pass
+    try:
+        pairs = parse_qs(urlparse(req.url or "").query, keep_blank_values=True)
+        vals = pairs.get(name) or pairs.get(name.lower())
+        if vals and vals[0] is not None:
+            return unquote(vals[0]).strip()
+    except Exception:
+        pass
+    return ""
+
+
 @app.route(route="ping", methods=["GET"])
-def ping(req: func.HttpRequest) -> func.HttpResponse:
-    return func.HttpResponse("ok", status_code=200)
+async def ping(req: func.HttpRequest) -> func.HttpResponse:
+    return func.HttpResponse(
+        "ok",
+        status_code=200,
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
-# ─────────────────────────────────────────────
-# Teams Bot Framework
-# ─────────────────────────────────────────────
 @app.route(route="messages", methods=["POST"])
 async def messages(req: func.HttpRequest) -> func.HttpResponse:
     if BOT is None:
@@ -116,19 +138,20 @@ async def messages(req: func.HttpRequest) -> func.HttpResponse:
                 body=json.dumps(response.body) if response.body else "",
                 status_code=response.status,
                 mimetype="application/json",
+                headers={"X-Content-Type-Options": "nosniff"},
             )
-        return func.HttpResponse(status_code=200)
+        return func.HttpResponse(
+            status_code=200,
+            headers={"X-Content-Type-Options": "nosniff"},
+        )
 
     except Exception as exc:
         logger.exception("messages endpoint failed")
         return _error_response(str(exc))
 
 
-# ─────────────────────────────────────────────
-# Web / Frontend Chat
-# ─────────────────────────────────────────────
 @app.route(route="nuvoco_frontend", methods=["POST"])
-def nuvoco_frontend(req: func.HttpRequest) -> func.HttpResponse:
+async def nuvoco_frontend(req: func.HttpRequest) -> func.HttpResponse:
     try:
         body = req.get_json()
         message = body.get("text", body.get("message", ""))
@@ -136,7 +159,7 @@ def nuvoco_frontend(req: func.HttpRequest) -> func.HttpResponse:
 
         logger.info("Frontend | channel=%s | text=%s", channel_id, message)
 
-        result = chat_manager.chat(message, channel_id)
+        result = await asyncio.to_thread(chat_manager.chat, message, channel_id)
 
         if result:
             answer, suggested_questions, status_code = result
@@ -157,18 +180,8 @@ def nuvoco_frontend(req: func.HttpRequest) -> func.HttpResponse:
         return _error_response(str(exc))
 
 
-# ─────────────────────────────────────────────
-# Prime Conversation (inject prior history into RAG thread on first open)
-# ─────────────────────────────────────────────
 @app.route(route="prime_conversation", methods=["POST"])
-def prime_conversation(req: func.HttpRequest) -> func.HttpResponse:
-    """
-    Called once per login session when the user opens a stored conversation
-    for the first time. Seeds the in-memory LangGraph checkpoint with the
-    conversation's persisted messages so the RAG flow has full context.
-
-    Body: { "session_id": str, "messages": [{"role": "user"|"bot", "content": str, "timestamp": str}] }
-    """
+async def prime_conversation(req: func.HttpRequest) -> func.HttpResponse:
     try:
         body = req.get_json()
         session_id = body.get("session_id", "")
@@ -177,7 +190,9 @@ def prime_conversation(req: func.HttpRequest) -> func.HttpResponse:
         if not session_id:
             return _error_response("session_id required", 400)
 
-        chat_manager.inject_history(session_id, messages_payload)
+        await asyncio.to_thread(
+            chat_manager.inject_history, session_id, messages_payload
+        )
 
         logger.info(
             "Primed conversation %s with %d messages.", session_id, len(messages_payload)
@@ -189,24 +204,8 @@ def prime_conversation(req: func.HttpRequest) -> func.HttpResponse:
         return _error_response(str(exc))
 
 
-# ─────────────────────────────────────────────
-# Append Exchange (save one user+assistant turn immediately)
-# ─────────────────────────────────────────────
 @app.route(route="append_exchange", methods=["POST"])
-def append_exchange(req: func.HttpRequest) -> func.HttpResponse:
-    """
-    Appends a single user/assistant exchange to a conversation in blob storage.
-    Called right after each assistant response.
-
-    Body:
-    {
-      "user_id": str,
-      "conversation_id": str,
-      "conversation_title": str,
-      "user_message": { "content": str, "timestamp": str },
-      "assistant_message": { "content": str, "timestamp": str, "suggestedQuestions": [...] }
-    }
-    """
+async def append_exchange(req: func.HttpRequest) -> func.HttpResponse:
     try:
         body = req.get_json()
         user_id = body.get("user_id", "")
@@ -218,12 +217,14 @@ def append_exchange(req: func.HttpRequest) -> func.HttpResponse:
         if not user_id or not conversation_id:
             return _error_response("user_id and conversation_id required", 400)
 
-        history = chat_history.load_history(user_id)
+        history = await chat_history.load_history_async(user_id)
         convs = history.get("conversations", [])
 
         existing = next((c for c in convs if c["id"] == conversation_id), None)
         if existing is None:
-            existing = chat_history.build_conversation(conversation_id, conversation_title)
+            existing = chat_history.build_conversation(
+                conversation_id, conversation_title
+            )
             convs.insert(0, existing)
 
         existing["title"] = conversation_title
@@ -246,7 +247,7 @@ def append_exchange(req: func.HttpRequest) -> func.HttpResponse:
             )
 
         history["conversations"] = convs
-        chat_history.save_history(user_id, history)
+        await chat_history.save_history_async(user_id, history)
 
         return _json_response({"status": "ok"})
 
@@ -255,17 +256,14 @@ def append_exchange(req: func.HttpRequest) -> func.HttpResponse:
         return _error_response(str(exc))
 
 
-# ─────────────────────────────────────────────
-# Chat History — Bulk Load / Save / Delete
-# ─────────────────────────────────────────────
 @app.route(route="chat_history", methods=["GET"])
-def get_history(req: func.HttpRequest) -> func.HttpResponse:
+async def get_history(req: func.HttpRequest) -> func.HttpResponse:
     try:
-        user_id = req.params.get("user_id", "")
+        user_id = _first_query_value(req, "user_id")
         if not user_id:
             return _error_response("user_id query parameter required", 400)
 
-        conversations = chat_history.get_user_conversations(user_id)
+        conversations = await chat_history.get_user_conversations_async(user_id)
         return _json_response(conversations)
 
     except Exception as exc:
@@ -274,7 +272,7 @@ def get_history(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.route(route="chat_history", methods=["POST"])
-def save_history(req: func.HttpRequest) -> func.HttpResponse:
+async def save_history(req: func.HttpRequest) -> func.HttpResponse:
     try:
         body = req.get_json()
         user_id = body.get("user_id", "")
@@ -283,7 +281,7 @@ def save_history(req: func.HttpRequest) -> func.HttpResponse:
         if not user_id:
             return _error_response("user_id required", 400)
 
-        chat_history.save_user_conversations(user_id, conversations)
+        await chat_history.save_user_conversations_async(user_id, conversations)
         return _json_response({"status": "ok"})
 
     except Exception as exc:
@@ -292,7 +290,7 @@ def save_history(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.route(route="chat_history_delete", methods=["POST"])
-def delete_history(req: func.HttpRequest) -> func.HttpResponse:
+async def delete_history(req: func.HttpRequest) -> func.HttpResponse:
     try:
         body = req.get_json()
         user_id = body.get("user_id", "")
@@ -301,7 +299,9 @@ def delete_history(req: func.HttpRequest) -> func.HttpResponse:
         if not user_id or not conversation_id:
             return _error_response("user_id and conversation_id required", 400)
 
-        deleted = chat_history.delete_conversation(user_id, conversation_id)
+        deleted = await chat_history.delete_conversation_async(
+            user_id, conversation_id
+        )
         return _json_response({"deleted": deleted})
 
     except Exception as exc:

@@ -155,7 +155,7 @@ async def get_history(req: Request) -> Response:
                 content_type="application/json",
             )
 
-        conversations = chat_history.get_user_conversations(user_id)
+        conversations = await chat_history.get_user_conversations_async(user_id)
         return Response(
             body=json.dumps(conversations),
             status=200,
@@ -183,7 +183,7 @@ async def save_history(req: Request) -> Response:
                 content_type="application/json",
             )
 
-        chat_history.save_user_conversations(user_id, conversations)
+        await chat_history.save_user_conversations_async(user_id, conversations)
         return Response(
             body=json.dumps({"status": "ok"}),
             status=200,
@@ -211,7 +211,9 @@ async def delete_history(req: Request) -> Response:
                 content_type="application/json",
             )
 
-        deleted = chat_history.delete_conversation(user_id, conversation_id)
+        deleted = await chat_history.delete_conversation_async(
+            user_id, conversation_id
+        )
         return Response(
             body=json.dumps({"deleted": deleted}),
             status=200,

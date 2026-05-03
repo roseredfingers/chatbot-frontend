@@ -1,16 +1,16 @@
-import { Component, HostListener, OnInit, ViewChild } from '@angular/core';
-import { Router } from '@angular/router';
-import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
-import { MatToolbarModule } from '@angular/material/toolbar';
+import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
+import { Component, HostListener, inject, OnInit, signal, viewChild } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
-import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
+import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
+import { MatToolbarModule } from '@angular/material/toolbar';
+import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { ChatService } from '../../services/chat.service';
+import { Conversation } from '../../models/chat.model';
 import { ChatHistoryComponent } from '../chat-history/chat-history.component';
 import { ChatWindowComponent } from '../chat-window/chat-window.component';
-import { Conversation } from '../../models/chat.model';
 
 @Component({
   selector: 'app-chat',
@@ -28,34 +28,29 @@ import { Conversation } from '../../models/chat.model';
   styleUrl: './chat.component.scss',
 })
 export class ChatComponent implements OnInit {
-  @ViewChild('sidenav') sidenav!: MatSidenav;
+  private readonly sidenav = viewChild<MatSidenav>('sidenav');
 
-  userName = '';
-  userInitial = '';
-  activeConversation: Conversation | null = null;
-  isMobile = false;
+  private readonly authService = inject(AuthService);
+  private readonly chatService = inject(ChatService);
+  private readonly router = inject(Router);
+  private readonly breakpointObserver = inject(BreakpointObserver);
 
-  constructor(
-    private authService: AuthService,
-    private chatService: ChatService,
-    private router: Router,
-    private breakpointObserver: BreakpointObserver
-  ) {}
+  readonly userInitial = signal('');
+  readonly activeConversation = signal<Conversation | null>(null);
+  readonly isMobile = signal(false);
 
   ngOnInit(): void {
-    this.userName = this.authService.getUserName();
-    this.userInitial = this.userName.charAt(0).toUpperCase();
+    const name = this.authService.getUserName();
+    this.userInitial.set(name.charAt(0).toUpperCase());
 
     const userEmail = this.authService.getUserEmail();
-    this.chatService.initForUser(userEmail, this.userName);
+    this.chatService.initForUser(userEmail, name);
 
     this.breakpointObserver
       .observe([Breakpoints.Handset])
-      .subscribe((result) => {
-        this.isMobile = result.matches;
-      });
+      .subscribe((result) => this.isMobile.set(result.matches));
 
-    this.activeConversation = this.chatService.createConversation();
+    this.activeConversation.set(this.chatService.createConversation());
   }
 
   @HostListener('window:beforeunload')
@@ -64,18 +59,17 @@ export class ChatComponent implements OnInit {
   }
 
   onConversationSelected(conversation: Conversation): void {
-    this.activeConversation = conversation;
-    // Prime the RAG backend with this conversation's history on first open.
+    this.activeConversation.set(conversation);
     this.chatService.primeConversationContext(conversation);
-    if (this.isMobile) {
-      this.sidenav.close();
+    if (this.isMobile()) {
+      this.sidenav()?.close();
     }
   }
 
   onNewChat(): void {
-    this.activeConversation = this.chatService.createConversation();
-    if (this.isMobile) {
-      this.sidenav.close();
+    this.activeConversation.set(this.chatService.createConversation());
+    if (this.isMobile()) {
+      this.sidenav()?.close();
     }
   }
 
@@ -89,6 +83,6 @@ export class ChatComponent implements OnInit {
   }
 
   toggleSidenav(): void {
-    this.sidenav.toggle();
+    this.sidenav()?.toggle();
   }
 }

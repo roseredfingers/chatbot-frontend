@@ -1,17 +1,9 @@
-import {
-  Component,
-  EventEmitter,
-  Input,
-  OnDestroy,
-  OnInit,
-  Output,
-} from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Component, inject, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
-import { MatDividerModule } from '@angular/material/divider';
-import { Subscription } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
 import { Conversation } from '../../models/chat.model';
 
@@ -28,27 +20,13 @@ import { Conversation } from '../../models/chat.model';
   templateUrl: './chat-history.component.html',
   styleUrl: './chat-history.component.scss',
 })
-export class ChatHistoryComponent implements OnInit, OnDestroy {
-  @Input() activeConversationId = '';
-  @Output() conversationSelected = new EventEmitter<Conversation>();
-  @Output() newChat = new EventEmitter<void>();
+export class ChatHistoryComponent {
+  readonly activeConversationId = input('');
 
-  conversations: Conversation[] = [];
-  private subscription!: Subscription;
+  readonly conversationSelected = output<Conversation>();
+  readonly newChat = output<void>();
 
-  constructor(private chatService: ChatService) {}
-
-  ngOnInit(): void {
-    this.subscription = this.chatService
-      .getConversations()
-      .subscribe((convs) => {
-        this.conversations = convs;
-      });
-  }
-
-  ngOnDestroy(): void {
-    this.subscription?.unsubscribe();
-  }
+  protected readonly chatService = inject(ChatService);
 
   selectConversation(conversation: Conversation): void {
     this.conversationSelected.emit(conversation);

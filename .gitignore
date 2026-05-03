@@ -41,5 +41,5 @@ testem.log
 .DS_Store
 Thumbs.db
 
-
-.vscode/
+# Azure Functions local secrets (use local.settings.json.example)
+backend/local.settings.json

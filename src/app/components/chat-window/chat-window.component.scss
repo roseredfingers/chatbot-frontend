@@ -99,7 +99,145 @@
 }
 
 .message-content {
-  white-space: pre-wrap;
+  word-break: break-word;
+
+  :first-child {
+    margin-top: 0;
+  }
+
+  :last-child {
+    margin-bottom: 0;
+  }
+
+  p {
+    margin: 0.5em 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    margin: 0.75em 0 0.35em;
+    line-height: 1.25;
+    font-weight: 600;
+  }
+
+  h1 {
+    font-size: 1.35rem;
+  }
+
+  h2 {
+    font-size: 1.2rem;
+  }
+
+  h3 {
+    font-size: 1.1rem;
+  }
+
+  ul,
+  ol {
+    margin: 0.5em 0;
+    padding-left: 1.35em;
+  }
+
+  li {
+    margin: 0.2em 0;
+  }
+
+  blockquote {
+    margin: 0.5em 0;
+    padding-left: 0.85em;
+    border-left: 3px solid rgba(0, 0, 0, 0.2);
+    color: rgba(0, 0, 0, 0.7);
+  }
+
+  code {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.88em;
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.06);
+  }
+
+  pre {
+    margin: 0.5em 0;
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    background: rgba(0, 0, 0, 0.06);
+    font-size: 0.85rem;
+    line-height: 1.45;
+
+    code {
+      padding: 0;
+      background: none;
+    }
+  }
+
+  a {
+    color: #5c6bc0;
+    text-decoration: underline;
+  }
+
+  table {
+    border-collapse: collapse;
+    margin: 0.5em 0;
+    font-size: 0.92em;
+  }
+
+  th,
+  td {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    padding: 6px 10px;
+    text-align: left;
+  }
+
+  th {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+    margin: 0.75em 0;
+  }
+}
+
+.message-bubble.user-bubble .message-content {
+  blockquote {
+    border-left-color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  code {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  pre {
+    background: rgba(0, 0, 0, 0.2);
+
+    code {
+      background: none;
+    }
+  }
+
+  a {
+    color: #fff;
+    text-underline-offset: 2px;
+  }
+
+  th,
+  td {
+    border-color: rgba(255, 255, 255, 0.35);
+  }
+
+  th {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  hr {
+    border-top-color: rgba(255, 255, 255, 0.35);
+  }
 }
 
 .message-time {
