@@ -76,6 +76,8 @@ Files: `src/environments/environment.ts` (local), `src/environments/environment.
 | `redirectUri` | SPA URL | `http://localhost:4200` | `https://<app>.azurestaticapps.net` |
 | `chatApiUrl` | Full URL to chat HTTP trigger | `http://localhost:7071/api/nuvoco_frontend` *or* deployed function URL | `https://<function-app>.azurewebsites.net/api/nuvoco_frontend` |
 | `chatHistoryApiUrl` | **Base** API URL (no trailing slash); app appends `/chat_history`, etc. | `http://localhost:7071/api` | `https://<function-app>.azurewebsites.net/api` |
+| `adminEmails` | Entra emails that may open `/admin` (must match `ADMIN_EMAILS` on the API). Use `[]` to disable the admin UI. | `["you@company.com"]` | same |
+| `adminApiKey` | Optional; must match `ADMIN_API_KEY` when that setting is enabled | omit | long random secret |
 
 **Important:** `chatHistoryApiUrl` must be the prefix that ends with `/api`, because the code builds paths like `${chatHistoryApiUrl}/chat_history`.
 
@@ -125,6 +127,41 @@ Your deployed project may also use a separate `llm` module (not always in source
 | `AZURE_OPENAI_API_VERSION` | e.g. `2024-02-15-preview` |
 
 RAG/search modules (e.g. `search_documents.py`) may introduce **additional** keys (search service name, index, API key). Add those in the Function App when that code is present.
+
+### 3.4 Per-user monthly token limits (blob storage)
+
+Counters are stored per user as gzip JSON: `{safe_user_id}/token-usage.json.gz` in the **same** container as chat history (`CHAT_HISTORY_CONTAINER`). The billing period is the **UTC calendar month** (`YYYY-MM`). The file uses **schema v2**: a `months` map with per-month totals and optional `days` maps (`YYYY-MM-DD`, UTC) for admin reporting. Older flat records are migrated in memory when read. Custom monthly caps are optional: `{safe_user_id}/token-limits.json.gz` (`input_limit`, `output_limit`); if missing, the env defaults below apply.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `MONTHLY_INPUT_TOKEN_LIMIT` | `1000000` | Max **estimated** input tokens per month (user message + overhead). |
+| `MONTHLY_OUTPUT_TOKEN_LIMIT` | `1000000` | Max **estimated** output tokens per month (assistant text). |
+| `TOKEN_ESTIMATE_INPUT_OVERHEAD` | `120` | Extra input tokens assumed per turn (system/context). |
+| `MAX_ASSUMED_OUTPUT_TOKENS_PER_TURN` | `8192` | Pre-check buffer so a request is rejected if output budget cannot fit another large reply. |
+
+Token counts are **estimates** (\~4 bytes per UTF-8 byte / token), not billing-grade OpenAI meter readings. The API returns **429** with `{"code":"TOKEN_LIMIT"}` when the pre-check fails.
+
+- `GET /api/token_usage?user_id=<email>` — JSON for the SPA meter and profile page.  
+- `POST /api/nuvoco_frontend` — includes `token_usage` on success when `from.id` / `user_id` is present in the body.
+
+### 3.5 Admin token portal (org dashboards + limit overrides)
+
+The Angular route `/admin` (visible only when `environment.adminEmails` is non-empty and matches the signed-in user) calls admin APIs that **scan** all `token-usage.json.gz` blobs. Protect these endpoints in production.
+
+| Setting | Description |
+|---------|-------------|
+| `ADMIN_EMAILS` | Comma-separated list of Entra **sign-in emails** (lowercase matching) allowed to use admin APIs. Each request should send header `X-Admin-User-Email` with the same email the SPA uses (`AuthService.getUserEmail()`). |
+| `ADMIN_API_KEY` | Optional. When set, each request must also send `X-Admin-Api-Key` with this exact value. Configure the same string in Angular `environment.adminApiKey`. |
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/admin/token_overview?year=YYYY` | Organization-wide **estimated** token totals by UTC day and month, plus today / current-month summaries when viewing the current year. |
+| GET | `/api/admin/token_users` | Distinct user folder IDs from blob paths (chat history + token usage), with **effective** monthly limits. |
+| POST | `/api/admin/token_limits` | Body: `{ "emails": ["u@contoso.com"], "input_limit": 1000000, "output_limit": 1000000 }` — writes per-user `token-limits.json.gz` for every listed email. |
+
+**Daily history:** Day-level totals are incremented on each successful chat turn. Months that only ever used the legacy flat blob (before v2) will have monthly totals but **no** per-day breakdown until new traffic arrives.
+
+**Frontend:** Set `adminEmails: ['admin@yourtenant.com']` in `environment.ts` / `environment.prod.ts`. Add `adminApiKey` when `ADMIN_API_KEY` is set on the function app.
 
 ---
 

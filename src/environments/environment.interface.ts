@@ -18,4 +18,13 @@ export interface AppEnvironment {
   chatRequestTimeoutMs: number;
   /** Default HTTP budget for history CRUD (ms) */
   httpDefaultTimeoutMs: number;
+  /**
+   * Entra sign-in emails that may open `/admin` (must match API `ADMIN_EMAILS`).
+   * Leave empty to hide the admin UI from everyone.
+   */
+  adminEmails?: string[];
+  /**
+   * When the API has `ADMIN_API_KEY` set, send the same value here.
+   */
+  adminApiKey?: string;
 }

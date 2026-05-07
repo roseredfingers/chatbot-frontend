@@ -19,6 +19,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ChatMessage, Conversation } from '../../models/chat.model';
 import { MarkdownPipe } from '../../pipes/markdown.pipe';
 import { ChatService } from '../../services/chat.service';
+import { TokenUsageService } from '../../services/token-usage.service';
+import { TokenMeterComponent } from '../token-meter/token-meter.component';
 
 @Component({
   selector: 'app-chat-window',
@@ -33,12 +35,14 @@ import { ChatService } from '../../services/chat.service';
     MatFormFieldModule,
     MatChipsModule,
     MatProgressSpinnerModule,
+    TokenMeterComponent,
   ],
   templateUrl: './chat-window.component.html',
   styleUrl: './chat-window.component.scss',
 })
 export class ChatWindowComponent {
   private readonly chatService = inject(ChatService);
+  protected readonly tokenUsage = inject(TokenUsageService);
 
   readonly conversation = input.required<Conversation>();
   private readonly messagesContainer =
@@ -53,6 +57,14 @@ export class ChatWindowComponent {
     return list.find((c) => c.id === id)?.messages ?? [];
   });
 
+  readonly atLimit = computed(() => {
+    const u = this.tokenUsage.snapshot();
+    return (
+      u != null &&
+      (u.input_tokens >= u.input_limit || u.output_tokens >= u.output_limit)
+    );
+  });
+
   constructor() {
     effect(() => {
       void this.messages().length;
@@ -62,7 +74,7 @@ export class ChatWindowComponent {
   }
 
   sendInternal(message: string): void {
-    if (!message || this.isLoading()) return;
+    if (!message || this.isLoading() || this.atLimit()) return;
 
     this.userInput.set('');
     this.isLoading.set(true);

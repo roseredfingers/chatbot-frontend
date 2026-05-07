@@ -1,0 +1,288 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--admin-bg, #0d1117);
+  color: var(--admin-fg, #c9d1d9);
+}
+
+.admin-toolbar {
+  background: #161b22;
+  color: #f0f6fc;
+  border-bottom: 1px solid #30363d;
+
+  .title {
+    margin-left: 8px;
+    font-weight: 600;
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  button mat-icon {
+    color: #8b949e;
+  }
+}
+
+.admin-shell {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  box-sizing: border-box;
+}
+
+.banner-err {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: 6px;
+  background: #490202;
+  border: 1px solid #ff7b72;
+  color: #ffddd2;
+  font-size: 14px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.year-field {
+  width: 140px;
+}
+
+.inline-spinner {
+  opacity: 0.85;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: #161b22 !important;
+  border: 1px solid #30363d !important;
+  color: inherit !important;
+  padding: 16px !important;
+  border-radius: 8px !important;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #f0f6fc;
+}
+
+.stat-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #8b949e;
+}
+
+.stat-date {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6e7681;
+}
+
+.stat-muted {
+  font-size: 13px;
+  color: #8b949e;
+  line-height: 1.45;
+}
+
+.panel {
+  background: #161b22 !important;
+  border: 1px solid #30363d !important;
+  color: inherit !important;
+  margin-bottom: 20px;
+  padding: 20px !important;
+  border-radius: 8px !important;
+}
+
+.panel-title {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #f0f6fc;
+}
+
+.panel-hint {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #8b949e;
+  line-height: 1.45;
+}
+
+.contrib-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #8b949e;
+  margin-bottom: 10px;
+
+  .sw {
+    width: 11px;
+    height: 11px;
+    border-radius: 2px;
+    display: inline-block;
+    margin: 0 1px;
+  }
+
+  .l0 {
+    background: #161b22;
+    border: 1px solid #30363d;
+  }
+
+  .l1 {
+    background: #0e4429;
+  }
+  .l2 {
+    background: #006d32;
+  }
+  .l3 {
+    background: #26a641;
+  }
+  .l4 {
+    background: #39d353;
+  }
+}
+
+.contrib-scroll {
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.contrib-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 11px);
+  gap: 3px;
+  width: max-content;
+}
+
+.cell {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  box-sizing: border-box;
+
+  &.faded {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    opacity: 0.5;
+  }
+
+  &.l0:not(.faded) {
+    background: #161b22;
+    border: 1px solid #30363d;
+  }
+
+  &.l1 {
+    background: #0e4429;
+  }
+  &.l2 {
+    background: #006d32;
+  }
+  &.l3 {
+    background: #26a641;
+  }
+  &.l4 {
+    background: #39d353;
+  }
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.month-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid #30363d;
+  }
+
+  th {
+    color: #8b949e;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .empty-row {
+    color: #8b949e;
+    text-align: center;
+    padding: 24px;
+  }
+}
+
+.limits-panel .limits-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+
+  .users-field {
+    flex: 1 1 280px;
+    min-width: 200px;
+  }
+
+  mat-form-field {
+    flex: 0 1 180px;
+  }
+
+  button {
+    margin-top: 4px;
+  }
+}
+
+.opt-badge {
+  margin-left: 8px;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: #388bfd33;
+  color: #79c0ff;
+}
+
+@media (max-width: 599px) {
+  .admin-shell {
+    padding: 16px 12px 40px;
+  }
+
+  .stat-value {
+    font-size: 1.45rem;
+  }
+}

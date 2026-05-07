@@ -51,14 +51,15 @@
   </div>
 
   <div class="input-area">
+    <app-token-meter [usage]="tokenUsage.snapshot()" size="compact" />
     <mat-form-field class="message-input" appearance="outline">
       <input
         matInput
-        placeholder="Type a message..."
+        [placeholder]="atLimit() ? 'Monthly token limit reached (resets UTC month).' : 'Type a message...'"
         [ngModel]="userInput()"
         (ngModelChange)="userInput.set($event)"
         (keydown)="onKeyDown($event)"
-        [disabled]="isLoading()"
+        [disabled]="isLoading() || atLimit()"
         autocomplete="off"
       />
     </mat-form-field>
@@ -68,7 +69,7 @@
       type="button"
       class="send-btn"
       (click)="sendMessage()"
-      [disabled]="!userInput().trim() || isLoading()"
+      [disabled]="!userInput().trim() || isLoading() || atLimit()"
     >
       <mat-icon>send</mat-icon>
     </button>

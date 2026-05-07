@@ -31,13 +31,22 @@
             </div>
           </div>
 
-          <div class="info-row">
-            <mat-icon>phone</mat-icon>
-            <div class="info-content">
-              <span class="info-label">Phone Number</span>
-              <span class="info-value">{{ p.phone }}</span>
-            </div>
+        <div class="usage-section">
+          <h3 class="usage-heading">Monthly token usage</h3>
+          <p class="usage-hint">
+            Estimated input + output tokens for this assistant (UTC calendar month). Hover the ring for details.
+          </p>
+          <div class="usage-meter-wrap">
+            <app-token-meter [usage]="tokenUsage.snapshot()" size="comfortable" />
           </div>
+          @if (tokenUsage.snapshot(); as u) {
+            <ul class="usage-stats">
+              <li><strong>Period:</strong> {{ u.period }} (UTC)</li>
+              <li><strong>Input:</strong> {{ u.input_tokens | number }} / {{ u.input_limit | number }}</li>
+              <li><strong>Output:</strong> {{ u.output_tokens | number }} / {{ u.output_limit | number }}</li>
+              <li><strong>Combined:</strong> {{ u.combined_used | number }} / {{ u.combined_limit | number }}</li>
+            </ul>
+          }
         </div>
       </mat-card-content>
 

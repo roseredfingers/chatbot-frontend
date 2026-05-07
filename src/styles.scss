@@ -40,3 +40,18 @@ html, body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.3);
 }
+
+/* Token meter hover (MatTooltip multiline) */
+.token-meter-tooltip {
+  white-space: pre-wrap;
+  max-width: min(320px, 90vw);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.admin-heat-tooltip {
+  white-space: pre-wrap;
+  max-width: min(280px, 90vw);
+  font-size: 12px;
+  line-height: 1.45;
+}

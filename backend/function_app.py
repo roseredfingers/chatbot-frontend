@@ -5,6 +5,10 @@ HTTP triggers (under /api/... per host.json):
   GET  /api/ping
   POST /api/messages                  – Teams Bot Framework
   POST /api/nuvoco_frontend           – Web/frontend chat
+  GET  /api/token_usage               – Monthly token budget (blob-backed)
+  GET  /api/admin/token_overview      – Admin: org token aggregates (year, daily/monthly)
+  GET  /api/admin/token_users         – Admin: known users + effective limits
+  POST /api/admin/token_limits        – Admin: set monthly limits by email
   GET  /api/chat_history              – Load all conversations for a user
   POST /api/chat_history              – Bulk-save conversations
   POST /api/chat_history_delete       – Delete a single conversation
@@ -21,6 +25,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from urllib.parse import parse_qs, unquote, urlparse
 
 import azure.functions as func
@@ -34,7 +39,10 @@ from botbuilder.core import (
 from botbuilder.schema import Activity
 
 import chat_history
+import admin_tokens
+import token_usage
 from langgraph_chain import ThreadedChatManager
+from token_usage import TokenLimitExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +114,31 @@ def _first_query_value(req: func.HttpRequest, name: str) -> str:
     return ""
 
 
+def _validate_admin(req: func.HttpRequest) -> tuple[bool, str]:
+    api_key_env = (os.getenv("ADMIN_API_KEY") or "").strip()
+    emails_raw = (os.getenv("ADMIN_EMAILS") or "").strip()
+    allowed = {e.strip().lower() for e in emails_raw.split(",") if e.strip()}
+    hdr_email = (
+        req.headers.get("X-Admin-User-Email")
+        or req.headers.get("x-admin-user-email")
+        or ""
+    ).strip().lower()
+    hdr_key = (
+        req.headers.get("X-Admin-Api-Key") or req.headers.get("x-admin-api-key") or ""
+    ).strip()
+
+    if not api_key_env and not allowed:
+        return False, "Admin access is not configured (set ADMIN_EMAILS and/or ADMIN_API_KEY)."
+
+    if api_key_env and hdr_key != api_key_env:
+        return False, "Invalid or missing admin API key."
+
+    if allowed and hdr_email not in allowed:
+        return False, "Your account is not authorized for admin access."
+
+    return True, ""
+
+
 @app.route(route="ping", methods=["GET"])
 async def ping(req: func.HttpRequest) -> func.HttpResponse:
     return func.HttpResponse(
@@ -156,25 +189,42 @@ async def nuvoco_frontend(req: func.HttpRequest) -> func.HttpResponse:
         body = req.get_json()
         message = body.get("text", body.get("message", ""))
         channel_id = body.get("channelId", body.get("session_id", "default"))
+        from_block = body.get("from") or {}
+        user_id = from_block.get("id") or body.get("user_id", "")
 
         logger.info("Frontend | channel=%s | text=%s", channel_id, message)
+
+        await token_usage.check_request_allowed_async(user_id, message)
 
         result = await asyncio.to_thread(chat_manager.chat, message, channel_id)
 
         if result:
             answer, suggested_questions, status_code = result
+            usage_payload = {}
+            if user_id:
+                usage_payload = await token_usage.record_turn_async(
+                    user_id, message, answer or ""
+                )
             return _json_response({
                 "answer": answer,
                 "suggested_questions": suggested_questions or [],
                 "status": status_code,
+                "token_usage": usage_payload,
             })
 
+        usage_payload = {}
+        if user_id:
+            usage_payload = await token_usage.get_usage_async(user_id)
         return _json_response({
             "answer": "No response generated.",
             "suggested_questions": [],
             "status": 200,
+            "token_usage": usage_payload,
         })
 
+    except TokenLimitExceeded as exc:
+        logger.warning("Token limit | user: %s", exc.message)
+        return _json_response({"error": exc.message, "code": "TOKEN_LIMIT"}, 429)
     except Exception as exc:
         logger.exception("nuvoco_frontend endpoint failed")
         return _error_response(str(exc))
@@ -253,6 +303,88 @@ async def append_exchange(req: func.HttpRequest) -> func.HttpResponse:
 
     except Exception as exc:
         logger.exception("append_exchange endpoint failed")
+        return _error_response(str(exc))
+
+
+@app.route(route="token_usage", methods=["GET"])
+async def get_token_usage(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        user_id = _first_query_value(req, "user_id")
+        if not user_id:
+            return _error_response("user_id query parameter required", 400)
+        data = await token_usage.get_usage_async(user_id)
+        return _json_response(data)
+
+    except Exception as exc:
+        logger.exception("get_token_usage failed")
+        return _error_response(str(exc))
+
+
+@app.route(route="admin/token_overview", methods=["GET"])
+async def admin_token_overview(req: func.HttpRequest) -> func.HttpResponse:
+    ok, msg = _validate_admin(req)
+    if not ok:
+        return _json_response({"error": msg}, 403)
+    try:
+        year_raw = _first_query_value(req, "year")
+        year = int(year_raw) if year_raw else datetime.now(timezone.utc).year
+        if year < 2000 or year > 2100:
+            return _error_response("year out of range", 400)
+        data = await admin_tokens.aggregate_year_async(year)
+        return _json_response(data)
+    except ValueError:
+        return _error_response("invalid year", 400)
+    except Exception as exc:
+        logger.exception("admin_token_overview failed")
+        return _error_response(str(exc))
+
+
+@app.route(route="admin/token_users", methods=["GET"])
+async def admin_token_users(req: func.HttpRequest) -> func.HttpResponse:
+    ok, msg = _validate_admin(req)
+    if not ok:
+        return _json_response({"error": msg}, 403)
+    try:
+        rows = await admin_tokens.list_users_with_limits_async()
+        return _json_response({"users": rows})
+    except Exception as exc:
+        logger.exception("admin_token_users failed")
+        return _error_response(str(exc))
+
+
+@app.route(route="admin/token_limits", methods=["POST"])
+async def admin_token_limits(req: func.HttpRequest) -> func.HttpResponse:
+    ok, msg = _validate_admin(req)
+    if not ok:
+        return _json_response({"error": msg}, 403)
+    try:
+        body = req.get_json()
+        emails = body.get("emails") or []
+        if not isinstance(emails, list) or not emails:
+            return _error_response("emails array required", 400)
+        in_lim = body.get("input_limit")
+        out_lim = body.get("output_limit")
+        if in_lim is None or out_lim is None:
+            return _error_response("input_limit and output_limit required", 400)
+        in_lim_i = int(in_lim)
+        out_lim_i = int(out_lim)
+        if in_lim_i < 0 or out_lim_i < 0:
+            return _error_response("limits must be non-negative", 400)
+
+        updated = []
+        for raw in emails:
+            uid = str(raw).strip()
+            if not uid:
+                continue
+            await token_usage.set_user_limits_async(uid, in_lim_i, out_lim_i)
+            updated.append(uid)
+
+        if not updated:
+            return _error_response("no valid emails in list", 400)
+
+        return _json_response({"updated": updated, "count": len(updated)})
+    except Exception as exc:
+        logger.exception("admin_token_limits failed")
         return _error_response(str(exc))
 
 

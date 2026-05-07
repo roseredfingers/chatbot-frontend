@@ -1,0 +1,172 @@
+<mat-toolbar class="admin-toolbar">
+  <button mat-icon-button type="button" (click)="goChat()" aria-label="Back to chat">
+    <mat-icon>arrow_back</mat-icon>
+  </button>
+  <span class="title">Token usage — admin</span>
+  <span class="spacer"></span>
+  <button mat-stroked-button type="button" color="primary" (click)="refreshAll()">
+    <mat-icon>refresh</mat-icon>
+    Refresh
+  </button>
+</mat-toolbar>
+
+<div class="admin-shell">
+  @if (loadError(); as err) {
+    <div class="banner-err">
+      <mat-icon>error</mat-icon>
+      {{ err }}
+    </div>
+  }
+
+  <div class="controls">
+    <mat-form-field appearance="outline" class="year-field">
+      <mat-label>Year (UTC)</mat-label>
+      <mat-select [value]="year()" (valueChange)="setYear($event)">
+        @for (y of yearOptions(); track y) {
+          <mat-option [value]="y">{{ y }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    @if (loading()) {
+      <mat-spinner diameter="28" class="inline-spinner" />
+    }
+  </div>
+
+  @if (overview(); as ov) {
+    <div class="stat-grid">
+      <mat-card class="stat-card">
+        <div class="stat-label">Today (UTC)</div>
+        @if (isViewingCurrentUtcYear()) {
+          <div class="stat-value">{{ ov.today_totals.combined | number }}</div>
+          <div class="stat-sub">
+            in {{ ov.today_totals.input_tokens | number }} · out
+            {{ ov.today_totals.output_tokens | number }} · users
+            {{ ov.today_totals.users }}
+          </div>
+          <div class="stat-date">{{ ov.today_utc }}</div>
+        } @else {
+          <div class="stat-muted">Select the current UTC year to see today’s organization totals.</div>
+        }
+      </mat-card>
+      <mat-card class="stat-card">
+        <div class="stat-label">This month (UTC)</div>
+        @if (isViewingCurrentUtcYear()) {
+          <div class="stat-value">{{ ov.current_month_totals.combined | number }}</div>
+          <div class="stat-sub">
+            in {{ ov.current_month_totals.input_tokens | number }} · out
+            {{ ov.current_month_totals.output_tokens | number }} · users
+            {{ ov.current_month_totals.users }}
+          </div>
+          <div class="stat-date">{{ ov.current_utc_month }}</div>
+        } @else {
+          <div class="stat-muted">Select the current UTC year to see month-to-date totals.</div>
+        }
+      </mat-card>
+      <mat-card class="stat-card">
+        <div class="stat-label">Year {{ ov.year }} total</div>
+        <div class="stat-value">{{ ov.year_totals.combined | number }}</div>
+        <div class="stat-sub">
+          in {{ ov.year_totals.input_tokens | number }} · out
+          {{ ov.year_totals.output_tokens | number }}
+        </div>
+        <div class="stat-date">{{ ov.users_with_usage_blobs }} users with usage data</div>
+      </mat-card>
+    </div>
+
+    <mat-card class="panel">
+      <h2 class="panel-title">Activity (estimated tokens)</h2>
+      <p class="panel-hint">
+        GitHub-style calendar: columns are weeks, rows Sun–Sat. Hover a square for that UTC day.
+      </p>
+      <div class="contrib-legend">
+        <span>Less</span>
+        <span class="sw l0"></span>
+        <span class="sw l1"></span>
+        <span class="sw l2"></span>
+        <span class="sw l3"></span>
+        <span class="sw l4"></span>
+        <span>More</span>
+      </div>
+      <div class="contrib-scroll">
+        <div
+          class="contrib-grid"
+          role="img"
+          [attr.aria-label]="'Token usage heatmap for ' + year()"
+        >
+          @for (c of heatCells(); track c.dateStr) {
+            <div
+              class="cell l{{ c.level }}"
+              [class.faded]="!c.inYear"
+              [matTooltip]="cellTooltip(c)"
+              matTooltipClass="admin-heat-tooltip"
+            ></div>
+          }
+        </div>
+      </div>
+    </mat-card>
+
+    <mat-card class="panel">
+      <h2 class="panel-title">Monthly totals (UTC) · {{ year() }}</h2>
+      <div class="table-wrap">
+        <table class="month-table">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th class="num">In</th>
+              <th class="num">Out</th>
+              <th class="num">Combined</th>
+              <th class="num">Users</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of monthRows(); track row.key) {
+              <tr>
+                <td>{{ row.key }}</td>
+                <td class="num">{{ row.input_tokens | number }}</td>
+                <td class="num">{{ row.output_tokens | number }}</td>
+                <td class="num">{{ row.combined | number }}</td>
+                <td class="num">{{ row.users }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5" class="empty-row">No monthly rows for this year yet.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </mat-card>
+  }
+
+  <mat-card class="panel limits-panel">
+    <h2 class="panel-title">Per-user monthly limits</h2>
+    <p class="panel-hint">
+      Select one or more user IDs (emails) and apply new input/output budgets. Values reset with usage
+      each UTC month.
+    </p>
+    <div class="limits-form">
+      <mat-form-field appearance="outline" class="users-field">
+        <mat-label>Users</mat-label>
+        <mat-select multiple name="adminUsers" [(ngModel)]="selectedUsers">
+          @for (u of users(); track u.user_id) {
+            <mat-option [value]="u.user_id">
+              {{ u.user_id }}
+              @if (u.has_custom_limits) {
+                <span class="opt-badge">custom</span>
+              }
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Input limit / month</mat-label>
+        <input matInput type="number" min="0" [ngModel]="limitInput()" (ngModelChange)="limitInput.set($event)" />
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Output limit / month</mat-label>
+        <input matInput type="number" min="0" [ngModel]="limitOutput()" (ngModelChange)="limitOutput.set($event)" />
+      </mat-form-field>
+      <button mat-flat-button color="primary" type="button" (click)="applyLimits()">Apply limits</button>
+    </div>
+  </mat-card>
+</div>

@@ -8,6 +8,7 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { ChatService } from '../../services/chat.service';
+import { TokenUsageService } from '../../services/token-usage.service';
 import { Conversation } from '../../models/chat.model';
 import { ChatHistoryComponent } from '../chat-history/chat-history.component';
 import { ChatWindowComponent } from '../chat-window/chat-window.component';
@@ -30,8 +31,9 @@ import { ChatWindowComponent } from '../chat-window/chat-window.component';
 export class ChatComponent implements OnInit {
   private readonly sidenav = viewChild<MatSidenav>('sidenav');
 
-  private readonly authService = inject(AuthService);
+  protected readonly authService = inject(AuthService);
   private readonly chatService = inject(ChatService);
+  private readonly tokenUsage = inject(TokenUsageService);
   private readonly router = inject(Router);
   private readonly breakpointObserver = inject(BreakpointObserver);
 
@@ -77,8 +79,13 @@ export class ChatComponent implements OnInit {
     this.router.navigate(['/profile']);
   }
 
+  goToAdmin(): void {
+    void this.router.navigate(['/admin']);
+  }
+
   logout(): void {
     this.chatService.saveNow();
+    this.tokenUsage.clear();
     this.authService.logout();
   }
 
