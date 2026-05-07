@@ -53,7 +53,10 @@ export class ChatService {
 
     this.storageService.loadHistory(userId).subscribe((conversations) => {
       if (conversations.length > 0) {
-        this._conversations.set(conversations);
+        const existing = this._conversations();
+        const loadedIds = new Set(conversations.map((c) => c.id));
+        const kept = existing.filter((c) => !loadedIds.has(c.id));
+        this._conversations.set([...kept, ...conversations]);
       }
     });
   }
@@ -211,28 +214,32 @@ export class ChatService {
     conversationId: string,
     message: ChatMessage
   ): void {
-    const conversations = this._conversations();
-    const conv = conversations.find((c) => c.id === conversationId);
-    if (conv) {
-      conv.messages.push(message);
-      conv.lastUpdated = new Date();
-      this._conversations.set([...conversations]);
-    }
+    this._conversations.update((conversations) =>
+      conversations.map((c) =>
+        c.id === conversationId
+          ? { ...c, messages: [...c.messages, message], lastUpdated: new Date() }
+          : c
+      )
+    );
   }
 
   private updateConversationTitle(
     conversationId: string,
     firstMessage: string
   ): void {
-    const conversations = this._conversations();
-    const conv = conversations.find((c) => c.id === conversationId);
-    if (conv && conv.title === 'New Chat') {
-      conv.title =
-        firstMessage.length > 40
-          ? firstMessage.substring(0, 40) + '...'
-          : firstMessage;
-      this._conversations.set([...conversations]);
-    }
+    this._conversations.update((conversations) =>
+      conversations.map((c) =>
+        c.id === conversationId && c.title === 'New Chat'
+          ? {
+              ...c,
+              title:
+                firstMessage.length > 40
+                  ? firstMessage.substring(0, 40) + '...'
+                  : firstMessage,
+            }
+          : c
+      )
+    );
   }
 
   private appendExchange(

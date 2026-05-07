@@ -6,7 +6,7 @@ import logging
 from llm import llm
 from utils import create_ticket, retrieve_ticket, extract_json
 
-from typing import List, Dict, Tuple, Optional, Annotated, TypedDict
+from typing import Any, List, Dict, Tuple, Optional, Annotated, TypedDict
 from langchain_core.messages import BaseMessage, AIMessage, HumanMessage
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
@@ -14,6 +14,7 @@ from search_documents import search_data
 
 AZURE_OPENAI_MODEL = os.getenv("AZURE_OPENAI_MODEL")
 MAX_TURNS = int(os.getenv("MAX_TURNS", 10))
+LANGGRAPH_MODE = os.getenv("LANGGRAPH_MODE", "multi").strip().lower()
 
 ROUTER_SYSTEM_PROMPT = prompt.ROUTER_SYSTEM_PROMPT
 RAG_SYSTEM_PROMPT = prompt.RAG_SYSTEM_PROMPT
@@ -50,6 +51,11 @@ class ChatState(TypedDict):
     awaiting_ticket_revision: bool
     pending_ticket_details: Optional[Dict]
     ticket_id: Optional[str]
+    # Multi-agent orchestration breadcrumbs (safe to ignore in single-agent mode)
+    intent_result: Optional[Dict[str, Any]]
+    history_result: Optional[Dict[str, Any]]
+    rag_result: Optional[Dict[str, Any]]
+    supervisor_decision: Optional[str]
 
 
 # ==========================
@@ -938,7 +944,66 @@ def end_turn_node(state: ChatState) -> ChatState:
     return state
 
 
-def create_langgraph_chain():
+def _intent_specialist_node(state: ChatState) -> ChatState:
+    updated = route_question(state)
+    decision = route_after_intent(updated)
+    updated["intent_result"] = {
+        "is_ticket": bool(updated.get("is_ticket")),
+        "ticket_id": updated.get("ticket_id"),
+        "needs_rag": bool(updated.get("needs_rag")),
+    }
+    updated["supervisor_decision"] = decision
+    return updated
+
+
+def _history_specialist_node(state: ChatState) -> ChatState:
+    updated = check_history_sufficiency(state)
+    updated["history_result"] = {
+        "needs_rag": bool(updated.get("needs_rag")),
+        "question_used": updated.get("question"),
+        "original_question": updated.get("original_question"),
+    }
+    return updated
+
+
+def _rag_specialist_node(state: ChatState) -> ChatState:
+    updated = retrieve_context(state)
+    updated = check_context_relevance(updated)
+    updated["rag_result"] = {
+        "context_present": bool(updated.get("context")),
+        "context_relevant": bool(updated.get("context_relevant")),
+    }
+    return updated
+
+
+def _response_specialist_node(state: ChatState) -> ChatState:
+    return generate_response(state)
+
+
+def _guardrail_specialist_node(state: ChatState) -> ChatState:
+    return verify_answer(state)
+
+
+def _ticket_specialist_node(state: ChatState) -> ChatState:
+    decision = state.get("supervisor_decision") or route_after_intent(state)
+    if decision == "preview_ticket":
+        return preview_ticket_node(state)
+    if decision == "revise_ticket":
+        return revise_ticket_node(state)
+    if decision == "create_ticket":
+        return create_ticket_node(state)
+    if decision == "decline_ticket":
+        return decline_ticket_node(state)
+    if decision == "retrieve_ticket":
+        return retrieve_ticket_node(state)
+    return end_turn_node(state)
+
+
+def _route_after_intent_specialist(state: ChatState) -> str:
+    return state.get("supervisor_decision") or route_after_intent(state)
+
+
+def create_single_agent_chain():
     workflow = StateGraph(ChatState)
 
     workflow.add_node("route", route_question)
@@ -992,6 +1057,57 @@ def create_langgraph_chain():
     return workflow.compile(checkpointer=checkpoint.memory_saver)
 
 
+def create_multi_agent_chain():
+    workflow = StateGraph(ChatState)
+
+    workflow.add_node("intent_specialist", _intent_specialist_node)
+    workflow.add_node("history_specialist", _history_specialist_node)
+    workflow.add_node("rag_specialist", _rag_specialist_node)
+    workflow.add_node("response_specialist", _response_specialist_node)
+    workflow.add_node("guardrail_specialist", _guardrail_specialist_node)
+    workflow.add_node("ticket_specialist", _ticket_specialist_node)
+
+    workflow.set_entry_point("intent_specialist")
+    workflow.add_conditional_edges(
+        "intent_specialist",
+        _route_after_intent_specialist,
+        {
+            "preview_ticket": "ticket_specialist",
+            "revise_ticket": "ticket_specialist",
+            "create_ticket": "ticket_specialist",
+            "decline_ticket": "ticket_specialist",
+            "retrieve_ticket": "ticket_specialist",
+            "end_turn": "ticket_specialist",
+            "retrieve": "rag_specialist",
+            "generate": "history_specialist",
+        },
+    )
+
+    workflow.add_conditional_edges(
+        "history_specialist",
+        route_after_history_check,
+        {
+            "retrieve": "rag_specialist",
+            "generate": "response_specialist",
+        },
+    )
+
+    workflow.add_edge("rag_specialist", "response_specialist")
+    workflow.add_edge("response_specialist", "guardrail_specialist")
+    workflow.add_edge("guardrail_specialist", END)
+    workflow.add_edge("ticket_specialist", END)
+
+    return workflow.compile(checkpointer=checkpoint.memory_saver)
+
+
+def create_langgraph_chain():
+    if LANGGRAPH_MODE == "single":
+        logging.info("LangGraph mode: single-agent")
+        return create_single_agent_chain()
+    logging.info("LangGraph mode: multi-agent")
+    return create_multi_agent_chain()
+
+
 # ==========================
 # CHAT MANAGER
 # ==========================
@@ -1000,6 +1116,7 @@ def create_langgraph_chain():
 class ThreadedChatManager:
 
     def __init__(self):
+        self.mode = LANGGRAPH_MODE if LANGGRAPH_MODE in {"single", "multi"} else "multi"
         self.graph = create_langgraph_chain()
 
     def chat(self, question: str, thread_id: str):
@@ -1042,6 +1159,10 @@ class ThreadedChatManager:
             awaiting_ticket_revision=awaiting_revision,
             pending_ticket_details=pending_details,
             ticket_id=ticket_id,
+            intent_result=None,
+            history_result=None,
+            rag_result=None,
+            supervisor_decision=None,
         )
 
         config = {"configurable": {"thread_id": thread_id}}
@@ -1100,6 +1221,10 @@ class ThreadedChatManager:
                 "awaiting_ticket_revision": False,
                 "pending_ticket_details": None,
                 "ticket_id": None,
+                "intent_result": None,
+                "history_result": None,
+                "rag_result": None,
+                "supervisor_decision": None,
             },
         )
         logging.info(
