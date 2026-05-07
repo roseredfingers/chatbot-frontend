@@ -1,28 +1,22 @@
 :host {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
-  min-width: 0;
-  width: 100%;
-  height: 100%;
   overflow: hidden;
 }
 
 .chat-window {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
-  width: 100%;
-  height: 100%;
   overflow: hidden;
   background: #fff;
-  box-sizing: border-box;
 }
 
 .messages-container {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -32,7 +26,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: #fff;
 }
 
 .welcome-message {
@@ -40,48 +33,43 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1 1 auto;
-  min-height: 12rem;
-  color: rgba(0, 0, 0, 0.45);
+  flex: 1;
+  min-height: 200px;
   text-align: center;
 
   .welcome-icon {
-    font-size: 72px;
-    width: 72px;
-    height: 72px;
-    color: #000;
+    font-size: 64px;
+    width: 64px;
+    height: 64px;
+    color: rgba(0, 0, 0, 0.35);
     margin-bottom: 16px;
   }
 
   h2 {
     margin: 0 0 8px;
     font-weight: 400;
-    color: #000;
+    color: #333;
   }
 
   p {
     margin: 0;
-    font-size: 16px;
-    color: rgba(0, 0, 0, 0.65);
+    font-size: 15px;
+    color: rgba(0, 0, 0, 0.5);
   }
 }
 
 .message-row {
   display: flex;
   gap: 12px;
-  width: 100%;
   max-width: 100%;
-  box-sizing: border-box;
 
   &.user {
     align-self: flex-end;
     flex-direction: row-reverse;
-    justify-content: flex-start;
   }
 
   &.bot {
     align-self: flex-start;
-    justify-content: flex-start;
   }
 }
 
@@ -89,6 +77,7 @@
   display: flex;
   align-items: flex-start;
   padding-top: 4px;
+  flex-shrink: 0;
 
   mat-icon {
     width: 32px;
@@ -100,22 +89,20 @@
 
 .message-bubble {
   padding: 12px 16px;
-  border-radius: 0;
+  border-radius: 12px;
   line-height: 1.5;
   word-wrap: break-word;
-  max-width: min(100%, 52rem);
-  border: 1px solid #000;
+  max-width: min(80%, 52rem);
 
   &.user-bubble {
-    background: #fff;
+    background: #f0f0f0;
     color: #000;
-    border-bottom: 2px solid #000;
   }
 
   &.bot-bubble {
     background: #fff;
     color: #000;
-    box-shadow: none;
+    border: 1px solid #e0e0e0;
   }
 
   &.loading-bubble {
@@ -175,7 +162,7 @@
   blockquote {
     margin: 0.5em 0;
     padding-left: 0.85em;
-    border-left: 3px solid #000;
+    border-left: 3px solid #ccc;
     color: rgba(0, 0, 0, 0.8);
   }
 
@@ -215,63 +202,26 @@
 
   th,
   td {
-    border: 1px solid #000;
+    border: 1px solid #ddd;
     padding: 6px 10px;
     text-align: left;
   }
 
   th {
-    background: #f0f0f0;
+    background: #f5f5f5;
   }
 
   hr {
     border: none;
-    border-top: 1px solid #000;
+    border-top: 1px solid #e0e0e0;
     margin: 0.75em 0;
-  }
-}
-
-.message-bubble.user-bubble .message-content {
-  blockquote {
-    border-left-color: #000;
-    color: rgba(0, 0, 0, 0.85);
-  }
-
-  code {
-    background: rgba(0, 0, 0, 0.06);
-  }
-
-  pre {
-    background: rgba(0, 0, 0, 0.06);
-
-    code {
-      background: none;
-    }
-  }
-
-  a {
-    color: #000;
-    text-underline-offset: 2px;
-  }
-
-  th,
-  td {
-    border-color: #000;
-  }
-
-  th {
-    background: #f0f0f0;
-  }
-
-  hr {
-    border-top-color: #000;
   }
 }
 
 .message-time {
   font-size: 11px;
   margin-top: 4px;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .suggested-questions {
@@ -279,16 +229,15 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-left: 44px;
-  margin-top: -8px;
+  margin-top: -4px;
   max-width: min(100%, 52rem);
-  box-sizing: border-box;
 }
 
 .suggestion-chip {
   font-size: 13px;
-  border-radius: 0;
-  border-color: #000;
-  color: #000;
+  border-radius: 16px;
+  border-color: #ccc;
+  color: #333;
   text-transform: none;
   background: #fff;
 
@@ -300,20 +249,20 @@
 .input-area {
   display: flex;
   align-items: center;
-  flex-shrink: 0;
-  padding: 12px 24px 16px;
-  gap: 12px;
+  flex: 0 0 auto;
+  padding: 8px 16px 12px;
+  gap: 8px;
   background: #fff;
-  border-top: 1px solid #000;
+  border-top: 1px solid #e0e0e0;
 
   app-token-meter {
-    align-self: flex-end;
-    margin-bottom: 10px;
+    flex-shrink: 0;
   }
 }
 
 .message-input {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
 
   ::ng-deep .mat-mdc-form-field-subscript-wrapper {
     display: none;
@@ -326,7 +275,8 @@
   ::ng-deep .mdc-notched-outline .mdc-notched-outline__leading,
   ::ng-deep .mdc-notched-outline .mdc-notched-outline__notch,
   ::ng-deep .mdc-notched-outline .mdc-notched-outline__trailing {
-    border-color: #000 !important;
+    border-color: #ccc !important;
+    border-radius: 24px;
   }
 
   ::ng-deep .mat-mdc-input-element {
@@ -335,17 +285,38 @@
 
   ::ng-deep .mat-mdc-floating-label,
   ::ng-deep .mdc-floating-label {
-    color: rgba(0, 0, 0, 0.65) !important;
+    color: rgba(0, 0, 0, 0.5) !important;
   }
 }
 
 .send-btn {
   flex-shrink: 0;
-  --mdc-fab-container-color: #fff;
-  --mat-fab-foreground-color: #000;
-  --mdc-fab-icon-color: #000;
-  border: 1px solid #000;
-  box-shadow: none !important;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #000;
+  color: #fff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  mat-icon {
+    color: #fff;
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+
+  &:disabled {
+    background: #ccc;
+    cursor: default;
+  }
+
+  &:not(:disabled):hover {
+    background: #333;
+  }
 }
 
 @media (max-width: 599px) {
@@ -355,14 +326,14 @@
   }
 
   .message-bubble {
-    max-width: 100%;
+    max-width: 90%;
     padding: 10px 14px;
   }
 
   .welcome-message .welcome-icon {
-    font-size: 56px;
-    width: 56px;
-    height: 56px;
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
   }
 
   .suggested-questions {
@@ -371,24 +342,14 @@
   }
 
   .input-area {
-    padding: 8px 12px max(12px, env(safe-area-inset-bottom));
-    gap: 8px;
-    flex-wrap: wrap;
-
-    .message-input {
-      flex: 1 1 160px;
-      min-width: 0;
-    }
-  }
-
-  .send-btn {
-    margin-bottom: env(safe-area-inset-bottom, 0);
+    padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+    gap: 6px;
   }
 }
 
 @media (min-width: 600px) and (max-width: 959px) {
   .message-bubble {
-    max-width: min(100%, 42rem);
+    max-width: min(85%, 42rem);
   }
 
   .suggested-questions {
