@@ -1,9 +1,9 @@
 import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
-import { Component, HostListener, inject, OnInit, signal, viewChild } from '@angular/core';
+import { Component, HostListener, inject, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
+import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
@@ -29,8 +29,6 @@ import { ChatWindowComponent } from '../chat-window/chat-window.component';
   styleUrl: './chat.component.scss',
 })
 export class ChatComponent implements OnInit {
-  private readonly sidenav = viewChild<MatSidenav>('sidenav');
-
   protected readonly authService = inject(AuthService);
   private readonly chatService = inject(ChatService);
   private readonly tokenUsage = inject(TokenUsageService);
@@ -40,6 +38,8 @@ export class ChatComponent implements OnInit {
   readonly userInitial = signal('');
   readonly activeConversation = signal<Conversation | null>(null);
   readonly isMobile = signal(false);
+  /** Desktop: drawer pushes chat; closed = full width. Mobile: overlay; usually starts closed. */
+  readonly sidenavOpened = signal(true);
 
   ngOnInit(): void {
     const name = this.authService.getUserName();
@@ -48,9 +48,15 @@ export class ChatComponent implements OnInit {
     const userEmail = this.authService.getUserEmail();
     this.chatService.initForUser(userEmail, name);
 
-    this.breakpointObserver
-      .observe([Breakpoints.Handset])
-      .subscribe((result) => this.isMobile.set(result.matches));
+    this.breakpointObserver.observe([Breakpoints.Handset]).subscribe((result) => {
+      const mobile = result.matches;
+      this.isMobile.set(mobile);
+      if (mobile) {
+        this.sidenavOpened.set(false);
+      } else {
+        this.sidenavOpened.set(true);
+      }
+    });
 
     this.activeConversation.set(this.chatService.createConversation());
   }
@@ -64,14 +70,14 @@ export class ChatComponent implements OnInit {
     this.activeConversation.set(conversation);
     this.chatService.primeConversationContext(conversation);
     if (this.isMobile()) {
-      this.sidenav()?.close();
+      this.sidenavOpened.set(false);
     }
   }
 
   onNewChat(): void {
     this.activeConversation.set(this.chatService.createConversation());
     if (this.isMobile()) {
-      this.sidenav()?.close();
+      this.sidenavOpened.set(false);
     }
   }
 
@@ -90,6 +96,10 @@ export class ChatComponent implements OnInit {
   }
 
   toggleSidenav(): void {
-    this.sidenav()?.toggle();
+    this.sidenavOpened.update((v) => !v);
+  }
+
+  onSidenavOpenedChange(opened: boolean): void {
+    this.sidenavOpened.set(opened);
   }
 }
