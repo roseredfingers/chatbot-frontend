@@ -92,7 +92,7 @@
   border-radius: 12px;
   line-height: 1.5;
   word-wrap: break-word;
-  max-width: min(80%, 52rem);
+  max-width: 720px;
 
   &.user-bubble {
     background: #f0f0f0;
@@ -326,7 +326,7 @@
   }
 
   .message-bubble {
-    max-width: 90%;
+    max-width: 720px;
     padding: 10px 14px;
   }
 
@@ -349,7 +349,7 @@
 
 @media (min-width: 600px) and (max-width: 959px) {
   .message-bubble {
-    max-width: min(85%, 42rem);
+    max-width: 720px;
   }
 
   .suggested-questions {
