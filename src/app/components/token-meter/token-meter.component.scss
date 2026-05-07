@@ -30,7 +30,7 @@
 
 .token-bg {
   fill: none;
-  stroke: rgba(0, 0, 0, 0.12);
+  stroke: rgba(0, 0, 0, 0.25);
   stroke-width: 3;
   stroke-linecap: round;
 }
@@ -43,20 +43,23 @@
   transition: stroke-dashoffset 0.35s ease, stroke 0.2s ease;
 
   &.ok {
-    stroke: #2e7d32;
+    stroke: #000;
   }
 
   &.warn {
-    stroke: #f57c00;
+    stroke: #000;
+    opacity: 0.65;
   }
 
   &.critical {
-    stroke: #c62828;
+    stroke: #000;
+    opacity: 0.45;
   }
 }
 
 .token-meter-btn.at-limit .token-fg.ok,
 .token-meter-btn.at-limit .token-fg.warn,
 .token-meter-btn.at-limit .token-fg.critical {
-  stroke: #c62828;
+  stroke: #000;
+  opacity: 1;
 }

@@ -3,7 +3,7 @@
     <button mat-icon-button type="button" (click)="toggleSidenav()">
       <mat-icon>menu</mat-icon>
     </button>
-    <span class="app-name">AI Chat Assistant</span>
+    <span class="app-name">Nuvoco AI Assistant</span>
     <span class="toolbar-spacer"></span>
     <button mat-icon-button type="button" [matMenuTriggerFor]="userMenu" class="avatar-btn">
       <span class="user-avatar">{{ userInitial() }}</span>
@@ -28,9 +28,9 @@
 
   <mat-sidenav-container class="sidenav-container">
     <mat-sidenav
-      #sidenav
       [mode]="isMobile() ? 'over' : 'side'"
-      [opened]="!isMobile()"
+      [opened]="sidenavOpened()"
+      (openedChange)="onSidenavOpenedChange($event)"
       class="chat-sidenav"
     >
       <app-chat-history
