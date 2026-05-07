@@ -13,6 +13,12 @@
         <mat-icon>person</mat-icon>
         <span>Profile</span>
       </button>
+      @if (authService.isAdmin()) {
+        <button mat-menu-item type="button" (click)="goToAdmin()">
+          <mat-icon>analytics</mat-icon>
+          <span>Admin · Token usage</span>
+        </button>
+      }
       <button mat-menu-item type="button" (click)="logout()">
         <mat-icon>logout</mat-icon>
         <span>Logout</span>
@@ -35,14 +41,16 @@
     </mat-sidenav>
 
     <mat-sidenav-content class="chat-content">
-      @if (activeConversation(); as conv) {
-        <app-chat-window [conversation]="conv" />
-      } @else {
-        <div class="no-conversation">
-          <mat-icon>chat_bubble_outline</mat-icon>
-          <p>Select a conversation or start a new chat</p>
-        </div>
-      }
+      <div class="chat-main">
+        @if (activeConversation(); as conv) {
+          <app-chat-window [conversation]="conv" />
+        } @else {
+          <div class="no-conversation">
+            <mat-icon>chat_bubble_outline</mat-icon>
+            <p>Select a conversation or start a new chat</p>
+          </div>
+        }
+      </div>
     </mat-sidenav-content>
   </mat-sidenav-container>
 </div>

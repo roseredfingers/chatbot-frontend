@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { toObservable } from '@angular/core/rxjs-interop';
 import {
   Observable,
@@ -16,12 +16,14 @@ import {
   Conversation,
 } from '../models/chat.model';
 import { ChatHistoryStorageService } from './chat-history-storage.service';
+import { TokenUsageService } from './token-usage.service';
 import { environment } from '../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class ChatService {
   private readonly http = inject(HttpClient);
   private readonly storageService = inject(ChatHistoryStorageService);
+  private readonly tokenUsage = inject(TokenUsageService);
 
   private readonly _conversations = signal<Conversation[]>([]);
   /** Sidebar and message views should read this signal (or `getConversations()`). */
@@ -47,6 +49,7 @@ export class ChatService {
     this.currentUserId = userId;
     this.currentUserName = userName;
     this.primedConversations.clear();
+    this.tokenUsage.load(userId);
 
     this.storageService.loadHistory(userId).subscribe((conversations) => {
       if (conversations.length > 0) {
@@ -115,6 +118,8 @@ export class ChatService {
           const suggestedQuestions = response.suggested_questions ?? [];
           const botTimestamp = new Date();
 
+          this.tokenUsage.applyFromResponse(response.token_usage);
+
           const botMessage: ChatMessage = {
             role: 'bot',
             content: answer,
@@ -128,6 +133,26 @@ export class ChatService {
           return response;
         }),
         catchError((err) => {
+          if (err instanceof HttpErrorResponse && err.status === 429) {
+            const body = err.error as { error?: string } | null;
+            const lim =
+              body && typeof body.error === 'string'
+                ? body.error
+                : 'Your monthly token budget is used up. It resets next month (UTC).';
+            console.warn('Token limit:', lim);
+            this.tokenUsage.load(this.currentUserId);
+            const errorMsg: ChatMessage = {
+              role: 'bot',
+              content: lim,
+              timestamp: new Date(),
+            };
+            this.addMessageToConversation(sessionId, errorMsg);
+            return of({
+              answer: errorMsg.content,
+              suggested_questions: [],
+              status: 429,
+            });
+          }
           if (err instanceof TimeoutError) {
             console.error('Chat API timed out after', environment.chatRequestTimeoutMs, 'ms');
           } else {

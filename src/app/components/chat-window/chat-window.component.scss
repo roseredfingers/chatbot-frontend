@@ -1,7 +1,17 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
 .chat-window {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
 }
 
@@ -46,15 +56,19 @@
 .message-row {
   display: flex;
   gap: 12px;
-  max-width: 75%;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 
   &.user {
     align-self: flex-end;
     flex-direction: row-reverse;
+    justify-content: flex-start;
   }
 
   &.bot {
     align-self: flex-start;
+    justify-content: flex-start;
   }
 }
 
@@ -76,6 +90,7 @@
   border-radius: 16px;
   line-height: 1.5;
   word-wrap: break-word;
+  max-width: min(100%, 52rem);
 
   &.user-bubble {
     background: linear-gradient(135deg, #667eea, #764ba2);
@@ -252,6 +267,8 @@
   gap: 8px;
   margin-left: 44px;
   margin-top: -8px;
+  max-width: min(100%, 52rem);
+  box-sizing: border-box;
 }
 
 .suggestion-chip {
@@ -273,6 +290,11 @@
   gap: 12px;
   background: #fff;
   border-top: 1px solid rgba(0, 0, 0, 0.08);
+
+  app-token-meter {
+    align-self: flex-end;
+    margin-bottom: 10px;
+  }
 }
 
 .message-input {
@@ -285,4 +307,52 @@
 
 .send-btn {
   flex-shrink: 0;
+}
+
+@media (max-width: 599px) {
+  .messages-container {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .message-bubble {
+    max-width: 100%;
+    padding: 10px 14px;
+  }
+
+  .welcome-message .welcome-icon {
+    font-size: 56px;
+    width: 56px;
+    height: 56px;
+  }
+
+  .suggested-questions {
+    margin-left: 0;
+    max-width: 100%;
+  }
+
+  .input-area {
+    padding: 8px 12px max(12px, env(safe-area-inset-bottom));
+    gap: 8px;
+    flex-wrap: wrap;
+
+    .message-input {
+      flex: 1 1 160px;
+      min-width: 0;
+    }
+  }
+
+  .send-btn {
+    margin-bottom: env(safe-area-inset-bottom, 0);
+  }
+}
+
+@media (min-width: 600px) and (max-width: 959px) {
+  .message-bubble {
+    max-width: min(100%, 42rem);
+  }
+
+  .suggested-questions {
+    max-width: min(100%, 42rem);
+  }
 }

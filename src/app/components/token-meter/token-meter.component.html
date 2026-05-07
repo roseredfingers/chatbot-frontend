@@ -1,0 +1,26 @@
+<button
+  type="button"
+  class="token-meter-btn"
+  [class.compact]="size() === 'compact'"
+  [class.comfortable]="size() === 'comfortable'"
+  [class.at-limit]="atLimit()"
+  [matTooltip]="tooltip()"
+  matTooltipShowDelay="200"
+  matTooltipClass="token-meter-tooltip"
+  aria-label="Monthly token usage; hover for details"
+>
+  <svg class="token-svg" viewBox="0 0 36 36" aria-hidden="true">
+    <circle class="token-bg" cx="18" cy="18" r="15.9155" pathLength="100" />
+    <circle
+      class="token-fg"
+      [class.ok]="strokeClass() === 'ok'"
+      [class.warn]="strokeClass() === 'warn'"
+      [class.critical]="strokeClass() === 'critical'"
+      cx="18"
+      cy="18"
+      r="15.9155"
+      pathLength="100"
+      [style.stroke-dashoffset]="dashOffset()"
+    />
+  </svg>
+</button>

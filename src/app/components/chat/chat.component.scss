@@ -1,7 +1,15 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 .chat-layout {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
 }
 
 .chat-toolbar {
@@ -37,19 +45,45 @@
 }
 
 .sidenav-container {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
   overflow: hidden;
+
+  /* Main pane must consume remaining width beside the history drawer */
+  ::ng-deep mat-sidenav-content {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+  }
 }
 
 .chat-sidenav {
-  width: 280px;
+  width: min(280px, 85vw);
   background: #16213e;
   border-right: none;
 }
 
 .chat-content {
   display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
   background: #f5f5f5;
+}
+
+.chat-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .no-conversation {
@@ -70,5 +104,15 @@
 
   p {
     font-size: 18px;
+  }
+}
+
+@media (max-width: 599px) {
+  .app-name {
+    font-size: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: min(200px, 42vw);
   }
 }

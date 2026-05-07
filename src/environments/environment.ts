@@ -13,4 +13,5 @@ export const environment: AppEnvironment = {
   chatHistoryApiUrl: 'http://localhost:7071/api',
   chatRequestTimeoutMs: 180_000,
   httpDefaultTimeoutMs: 60_000,
+  adminEmails: [],
 };

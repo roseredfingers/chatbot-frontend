@@ -10,4 +10,5 @@ export const environment: AppEnvironment = {
   chatHistoryApiUrl: 'https://YOUR_FUNCTION_APP.azurewebsites.net/api',
   chatRequestTimeoutMs: 180_000,
   httpDefaultTimeoutMs: 60_000,
+  adminEmails: [],
 };

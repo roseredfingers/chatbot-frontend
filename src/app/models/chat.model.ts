@@ -1,7 +1,10 @@
+import type { TokenUsageSnapshot } from './token-usage.model';
+
 export interface ChatResponse {
   answer: string;
   suggested_questions: string[];
   status: number;
+  token_usage?: TokenUsageSnapshot;
 }
 
 export interface Conversation {

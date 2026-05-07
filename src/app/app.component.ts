@@ -6,9 +6,15 @@ import { AuthService } from './services/auth.service';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet],
+  imports: [RouterOutlet  ],
   template: '<router-outlet></router-outlet>',
-  styles: [],
+  styles: `
+    :host {
+      display: block;
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+  `,
 })
 export class AppComponent implements OnInit {
   private readonly authService = inject(AuthService);

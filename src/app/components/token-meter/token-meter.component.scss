@@ -1,0 +1,62 @@
+.token-meter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: default;
+  border-radius: 50%;
+  flex-shrink: 0;
+
+  &.compact .token-svg {
+    width: 36px;
+    height: 36px;
+  }
+
+  &.comfortable .token-svg {
+    width: 120px;
+    height: 120px;
+  }
+
+  &.at-limit .token-fg {
+    stroke: #c62828;
+  }
+}
+
+.token-svg {
+  transform: rotate(-90deg);
+}
+
+.token-bg {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.12);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.token-fg {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  transition: stroke-dashoffset 0.35s ease, stroke 0.2s ease;
+
+  &.ok {
+    stroke: #2e7d32;
+  }
+
+  &.warn {
+    stroke: #f57c00;
+  }
+
+  &.critical {
+    stroke: #c62828;
+  }
+}
+
+.token-meter-btn.at-limit .token-fg.ok,
+.token-meter-btn.at-limit .token-fg.warn,
+.token-meter-btn.at-limit .token-fg.critical {
+  stroke: #c62828;
+}
