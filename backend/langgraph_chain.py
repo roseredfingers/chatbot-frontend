@@ -2,7 +2,7 @@
 langgraph_chain.py — Multi-Agent LangGraph system.
 
 Agents:
-  Supervisor  — CoT intent classification, routing, feedback tracking
+  Supervisor  — deterministic workflow + single LLM tool-router (run_rag vs ticketing)
   RAG Agent   — history check → vector search → generate → verify
   Ticket Agent— preview / create / revise / retrieve / decline
 
@@ -10,7 +10,6 @@ Auxiliary nodes:
   summarise   — condense last bot response
   ack         — positive feedback + clear history
   escalation  — ask about ticket creation after 2 negative-feedback strikes
-  clarify     — ask a specific clarification question
   decline     — reset ticket/escalation state
 """
 
@@ -187,76 +186,95 @@ def _classify_yes_no(question: str) -> Optional[str]:
 
 
 # ==================================================================
-# LLM TOOL CALLS — CoT wrappers
+# LLM TOOL ROUTER (single call: run_rag vs ticketing_* + optional topic)
 # ==================================================================
 
 
-def detect_topic_change(question: str, tracked_query: str, chat_history: List[BaseMessage]) -> bool:
-    """Returns True if the new question is about a DIFFERENT topic."""
-    if not tracked_query:
-        return True
-    history_text = build_history(trim_history(chat_history))
-    raw = _llm_call([
-        {"role": "system", "content": prompt.TOPIC_CHANGE_PROMPT.format(
-            tracked_query=tracked_query, history=history_text)},
-        {"role": "user", "content": question},
-    ])
-    decision = extract_decision(raw)
-    logging.info("Topic change detection: %s", decision)
-    return "DIFFERENT" in decision.upper()
-
-
-def check_needs_clarification(question: str, chat_history: List[BaseMessage]) -> tuple:
-    """Returns (needs_clarification: bool, clarification_question: str)."""
-    history_text = build_history(trim_history(chat_history))
-    raw = _llm_call([
-        {"role": "system", "content": prompt.CLARIFICATION_NEEDED_PROMPT.format(
-            history=history_text)},
-        {"role": "user", "content": question},
-    ])
-    needs = "YES" in extract_decision(raw, "NEEDS_CLARIFICATION").upper()
-    cq = ""
-    m = re.search(r"QUESTION\s*:\s*(.+)", raw, re.IGNORECASE | re.DOTALL)
+def _parse_json_object(raw: str) -> dict:
+    """Best-effort JSON parse for json_mode and occasional extra text."""
+    text = raw.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    stripped = extract_tag(text, "thinking")
+    if stripped != text:
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            pass
+    m = re.search(r"\{[\s\S]*\}", text)
     if m:
-        cq = extract_tag(m.group(1), "thinking").strip()
-    return needs, cq
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            return {}
+    return {}
 
 
-def is_ticket_request(question: str, chat_history: List[BaseMessage]) -> bool:
-    history_text = build_history(trim_history(chat_history))
-    raw = _llm_call([
-        {"role": "system", "content": prompt.TICKET_INTENT_PROMPT.format(history=history_text)},
-        {"role": "user", "content": question},
-    ])
-    decision = extract_decision(raw)
-    logging.info("Ticket intent: %s", decision)
-    return "YES" in decision.upper()
+def agent_route_tools_decision(
+    question: str,
+    messages: List[BaseMessage],
+    *,
+    needs_topic_check: bool,
+    tracked_query: Optional[str],
+) -> tuple[str, Optional[str], bool]:
+    """One LLM call: run_rag vs ticketing tools; optional topic-vs-tracked.
+
+    Replaces separate topic-change, ticket-creation, and ticket-ID retrieval
+    classifiers. Returns (route_decision, ticket_id_or_none, topic_is_different).
+    """
+    history_text = build_history(trim_history(messages))
+    if needs_topic_check and tracked_query:
+        topic_instruction = (
+            f"The user previously gave negative feedback on this tracked issue: {tracked_query}\n"
+            'You MUST set "topic_vs_tracked" to "SAME_TOPIC" or "DIFFERENT_TOPIC".\n'
+            "Rules: same system/issue follow-ups and feedback on that issue = SAME_TOPIC. "
+            "A clearly unrelated new question = DIFFERENT_TOPIC."
+        )
+    else:
+        topic_instruction = 'No topic comparison needed. Set "topic_vs_tracked" to null.'
+
+    system = prompt.AGENT_TOOL_ROUTER_PROMPT.format(
+        topic_instruction=topic_instruction,
+        history=history_text,
+        question=question,
+    )
+    raw = _llm_call([{"role": "system", "content": system}], json_mode=True)
+    data = _parse_json_object(raw)
+
+    tool = str(data.get("tool") or "run_rag").strip().lower().replace("-", "_").replace(" ", "_")
+    ticket_id = data.get("ticket_id")
+    if ticket_id is not None:
+        ticket_id = str(ticket_id).replace("None", "").strip()
+        if not (ticket_id.isdigit() and len(ticket_id) == 6):
+            ticket_id = None
+
+    topic_raw = data.get("topic_vs_tracked")
+    topic_differs = bool(
+        needs_topic_check
+        and tracked_query
+        and topic_raw
+        and "DIFFERENT" in str(topic_raw).upper()
+    )
+
+    logging.info(
+        "Agent tool router: tool=%s ticket_id=%s topic_vs_tracked=%s",
+        tool,
+        ticket_id,
+        topic_raw,
+    )
+
+    if "preview" in tool or tool in ("ticketing_preview", "create_ticket", "new_ticket"):
+        return "preview_ticket", None, topic_differs
+    if ("retrieve" in tool or "lookup" in tool or tool == "ticketing_retrieve") and ticket_id:
+        return "retrieve_ticket", ticket_id, topic_differs
+    return "rag_agent", None, topic_differs
 
 
-def is_ticket_detail_requested(question: str, chat_history: List[BaseMessage]) -> Optional[str]:
-    history_text = build_history(trim_history(chat_history))
-    raw = _llm_call([
-        {"role": "system", "content": prompt.TICKET_DETAILS_INTENT_PROMPT.format(history=history_text)},
-        {"role": "user", "content": question},
-    ])
-    ticket_id = extract_decision(raw, "TICKET_ID")
-    ticket_id = ticket_id.replace("None", "").strip()
-    if ticket_id.isnumeric() and len(ticket_id) == 6:
-        logging.info("Ticket detail request for: %s", ticket_id)
-        return ticket_id
-    return None
-
-
-def determine_if_rag_needed(question: str, chat_history: List[BaseMessage]) -> bool:
-    if not chat_history:
-        return True
-    history_text = build_history(trim_history(chat_history))
-    raw = _llm_call([
-        {"role": "system", "content": prompt.ROUTER_SYSTEM_PROMPT.format(history=history_text)},
-        {"role": "user", "content": question},
-    ])
-    decision = extract_decision(raw)
-    return "RAG_NEEDED" in decision.upper()
+# ==================================================================
+# LLM TOOL CALLS — CoT wrappers
+# ==================================================================
 
 
 def check_history_sufficiency(question: str, chat_history: List[BaseMessage]) -> tuple:
@@ -464,27 +482,29 @@ def supervisor_node(state: ChatState) -> ChatState:
             state["route_decision"] = "rag_agent"
             return state
 
-    # ── Normal routing: check for topic change if tracking ──
+    # ── Normal routing: one agent call chooses run_rag vs ticketing tools ──
     tracked = state.get("tracked_query")
-    if tracked and state.get("negative_feedback_count", 0) > 0:
-        if detect_topic_change(question, tracked, messages):
-            logging.info("Topic changed — resetting negative feedback counter.")
-            state["negative_feedback_count"] = 0
-            state["tracked_query"] = None
+    needs_topic = bool(tracked and state.get("negative_feedback_count", 0) > 0)
+    route_decision, routed_tid, topic_differs = agent_route_tools_decision(
+        question,
+        messages,
+        needs_topic_check=needs_topic,
+        tracked_query=tracked,
+    )
+    if needs_topic and topic_differs:
+        logging.info("Topic changed — resetting negative feedback counter.")
+        state["negative_feedback_count"] = 0
+        state["tracked_query"] = None
 
-    # ── Check ticket intents ──
-    if is_ticket_request(question, messages):
+    if route_decision == "preview_ticket":
         state["is_ticket"] = True
         state["route_decision"] = "preview_ticket"
         return state
-
-    tid = is_ticket_detail_requested(question, messages)
-    if tid:
-        state["ticket_id"] = tid
+    if route_decision == "retrieve_ticket" and routed_tid:
+        state["ticket_id"] = routed_tid
         state["route_decision"] = "retrieve_ticket"
         return state
 
-    # ── RAG vs non-RAG ──
     state["route_decision"] = "rag_agent"
     return state
 
@@ -502,16 +522,7 @@ def rag_agent_node(state: ChatState) -> ChatState:
     question = state["question"]
     messages = state["messages"]
 
-    # ── Step 1: Check if clarification is needed ──
-    needs_clarify, clarify_question = check_needs_clarification(question, messages)
-    if needs_clarify and clarify_question:
-        state["answer"] = clarify_question
-        state["suggested_questions"] = list(FIXED_SUGGESTIONS)
-        state["messages"].append(HumanMessage(content=question))
-        state["messages"].append(AIMessage(content=clarify_question))
-        return state
-
-    # ── Step 2: Check if history is sufficient ──
+    # ── Step 1: Check if history is sufficient ──
     original_question = question
     sufficient, rewritten = check_history_sufficiency(question, messages)
 
@@ -544,7 +555,7 @@ def rag_agent_node(state: ChatState) -> ChatState:
         else:
             state["context_relevant"] = False
 
-    # ── Step 3: Generate response ──
+    # ── Step 2: Generate response ──
     history_text = build_history(trim_history(messages))
     user_question = state.get("original_question") or state["question"]
     context = state.get("context", "")
@@ -561,7 +572,7 @@ def rag_agent_node(state: ChatState) -> ChatState:
     answer = extract_tag(raw, "answer")
     logging.info("Generated answer (truncated): %s", answer[:200])
 
-    # ── Step 4: Verify answer ──
+    # ── Step 3: Verify answer ──
     verify_raw = _llm_call([
         {"role": "system", "content": prompt.ANSWER_VERIFICATION_PROMPT.format(
             answer=answer, context=context or "", history=history_text)},
@@ -569,7 +580,7 @@ def rag_agent_node(state: ChatState) -> ChatState:
     verification = extract_decision(verify_raw)
     logging.info("Answer verification: %s", verification)
 
-    # ── Step 5: Finalize ──
+    # ── Step 4: Finalize ──
     state["answer"] = answer
     state["suggested_questions"] = list(FIXED_SUGGESTIONS)
 

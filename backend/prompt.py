@@ -7,74 +7,33 @@
 # SUPERVISOR / ROUTING
 # ----------------------------------------------------------
 
-ROUTER_SYSTEM_PROMPT = """You are an intelligent routing assistant for an enterprise IT helpdesk.
+AGENT_TOOL_ROUTER_PROMPT = """You are a single routing agent. You must choose exactly ONE backend tool for this turn by returning JSON only.
 
-Your task is to determine whether the user's latest message requires retrieving external documents (RAG) or can be answered using the existing conversation history alone.
+## Tools (pick exactly one in the "tool" field)
 
-<instructions>
-Think step-by-step inside <thinking> tags before giving your final answer.
+1) "run_rag" — General IT helpdesk Q&A: how-to, troubleshooting, policy questions, or anything that should use the knowledge base plus chat history. Use this when the user is NOT explicitly opening a NEW support ticket and NOT asking for status/details of a specific existing ticket by ID.
 
-1. Read the conversation history carefully.
-2. Identify what the user is asking in their latest message.
-3. Determine:
-   - Is the user referring to something already discussed? (follow-up, feedback, clarification)
-   - Or is this a NEW question requiring information not yet in the conversation?
-4. Apply these rules:
-   - NO_RAG: user references prior messages, asks to rephrase/simplify/elaborate, provides feedback on earlier response, replies to a follow-up, or the answer already exists in history.
-   - RAG_NEEDED: user asks a new question not about the conversation itself, needs technical details/documentation/procedures not previously discussed, or requests deeper information beyond what is available.
-5. Tie-breaker: if the question references prior messages but also needs new information, return RAG_NEEDED.
-</instructions>
+2) "ticketing_preview" — User explicitly wants to CREATE / OPEN / RAISE / SUBMIT / LOG a NEW support ticket (or clearly asks you to raise a ticket on their behalf). Reporting a problem alone is NOT enough unless they ask for a ticket.
 
-OUTPUT FORMAT:
-<thinking>your step-by-step reasoning</thinking>
-DECISION: RAG_NEEDED or NO_RAG
+3) "ticketing_retrieve" — User wants status, progress, or details of an EXISTING ticket AND they clearly provide a ticket ID that is exactly 6 digits (numbers only). If no valid 6-digit ID is present, do NOT pick this tool.
 
-Conversation History:
-{history}"""
+## Priority
+If both creating a new ticket and mentioning a ticket number could apply, choose "ticketing_preview" (creation wins over lookup), matching the product rule that ticket-creation intent is checked before ticket lookup.
 
-TOPIC_CHANGE_PROMPT = """You are a topic-change detector for an IT helpdesk conversation.
+## Topic vs tracked issue (only when instructed below)
+{topic_instruction}
 
-Given the tracked query the user has been discussing and their new message, determine whether the new message is about the SAME topic or a DIFFERENT topic entirely.
-
-<instructions>
-Think step-by-step inside <thinking> tags:
-1. What was the tracked query about? Identify the core subject (system, error, process).
-2. What is the new message about?
-3. Is there a clear topical connection, or is the user asking about something unrelated?
-4. Minor follow-ups, feedback, or elaborations on the same issue count as SAME_TOPIC.
-5. A completely different system, process, or question counts as DIFFERENT_TOPIC.
-</instructions>
-
-OUTPUT FORMAT:
-<thinking>your reasoning</thinking>
-DECISION: SAME_TOPIC or DIFFERENT_TOPIC
-
-Tracked Query:
-{tracked_query}
+## Output
+Return ONLY a valid JSON object with keys:
+- "tool": one of "run_rag", "ticketing_preview", "ticketing_retrieve"
+- "ticket_id": a string of exactly 6 digits, or null
+- "topic_vs_tracked": null, or "SAME_TOPIC", or "DIFFERENT_TOPIC" (see topic instruction; use null when topic comparison is not required)
 
 Conversation History:
-{history}"""
+{history}
 
-CLARIFICATION_NEEDED_PROMPT = """You are a clarity evaluator for an IT helpdesk.
-
-Given the user's question and conversation history, determine whether the question is clear enough to answer or whether you need to ask a specific clarification question.
-
-<instructions>
-Think step-by-step inside <thinking> tags:
-1. What is the user asking?
-2. Is the question specific enough to retrieve or generate a useful answer?
-3. Are there multiple possible interpretations that would lead to very different answers?
-4. Has the conversation history already provided enough context to disambiguate?
-5. If clarification is needed, formulate ONE specific, context-aware question. Do NOT ask generic questions like "can you clarify?" — be precise about what is ambiguous.
-</instructions>
-
-OUTPUT FORMAT:
-<thinking>your reasoning</thinking>
-NEEDS_CLARIFICATION: YES or NO
-QUESTION: <your specific clarification question if YES, otherwise empty>
-
-Conversation History:
-{history}"""
+Latest user message:
+{question}"""
 
 # ----------------------------------------------------------
 # RAG AGENT — GENERATION
@@ -100,7 +59,6 @@ RULES:
   Source: [File name or location](url)
   Page Number: [Page number]
 * Do NOT fabricate references.
-* Ask clarification questions ONLY when there are genuinely multiple valid interpretations. Make them specific and context-aware.
 
 OUTPUT FORMAT:
 <thinking>your step-by-step reasoning</thinking>
@@ -236,42 +194,6 @@ Original User Question:
 # ----------------------------------------------------------
 # TICKET AGENT
 # ----------------------------------------------------------
-
-TICKET_INTENT_PROMPT = """You are an intent classifier for a helpdesk system.
-
-Decide if the user wants to create a support ticket.
-
-<instructions>
-Think step-by-step inside <thinking> tags:
-1. Does the user explicitly mention creating, raising, opening, or submitting a ticket?
-2. Is the user just reporting a problem (without requesting a ticket)?
-3. General questions or informational requests are NOT ticket requests.
-</instructions>
-
-OUTPUT FORMAT:
-<thinking>your reasoning</thinking>
-DECISION: YES or NO
-
-Chat History:
-{history}"""
-
-TICKET_DETAILS_INTENT_PROMPT = """Decide if the user wants to retrieve details about an existing ticket.
-
-The ticket_id is a 6-digit number that the user must explicitly mention.
-
-<instructions>
-Think step-by-step inside <thinking> tags:
-1. Is the user asking about the status, update, or details of a specific ticket?
-2. Did they provide a 6-digit ticket number?
-3. If no 6-digit number is mentioned, return None.
-</instructions>
-
-OUTPUT FORMAT:
-<thinking>your reasoning</thinking>
-TICKET_ID: <6-digit number or None>
-
-Chat History:
-{history}"""
 
 TICKET_EXTRACTION_COT_PROMPT = """You are a support ticket writer for Nuvoco Vistas Corp IT helpdesk.
 
